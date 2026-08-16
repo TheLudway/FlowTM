@@ -12,3 +12,4 @@ wheels/
 # Ignorar data (solo se dejan los comprimidos)
 *.txt
 *.zip
+*.csv
