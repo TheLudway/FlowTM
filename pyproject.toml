@@ -7,7 +7,9 @@ authors = [
     { name = "TheLudway", email = "me@ludwigalvarado.me" }
 ]
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "marimo>=0.17.6",
+]
 
 [project.scripts]
 proyectoia = "proyectoia:main"
