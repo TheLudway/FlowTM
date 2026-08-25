@@ -1,18 +1,21 @@
 [project]
-name = "proyectoia"
+name = "flowtm"
 version = "0.1.0"
-description = "Add your description here"
+description = "Proyecto que propone mejorar GTFS de Transmilenio usando agentes de Inteligencia Artificial. Hecho para la asignatura de Inteligencia Artificial"
 readme = "README.md"
 authors = [
-    { name = "TheLudway", email = "me@ludwigalvarado.me" }
+{ name = "Ludwig Alvarado (TheLudway)", email = "me@ludwigalvarado.me" },
+{ name = "Kevin Adrian Pinilla Naranjo (KevinAPN)", email = "kevina.pinillan@utadeo.edu.co" },
+{ name = "Albert Geovanny Mahecha Reyes (mahecha08)", email = "albertg.mahechar@utadeo.edu.co"  },
+{ name = "Maria Fernanda Ospina Rocha (mf-ospina)", email ="m-ospina@utadeo.edu.co" }
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "marimo>=0.17.6",
+"marimo>=0.17.6",
 ]
 
 [project.scripts]
-proyectoia = "proyectoia:main"
+flowtm = "flowtm:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
