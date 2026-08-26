@@ -66,7 +66,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"notebooks/**/*.py" = ["N803"]
+"notebooks/**/*.py" = ["N803", "B018"]
 
 # Automatically fix safe violations when using `ruff check --fix`.
 fixable = ["ALL"]
