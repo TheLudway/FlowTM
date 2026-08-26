@@ -11,7 +11,7 @@ authors = [
 { name = "Albert Geovanny Mahecha Reyes (mahecha08)", email = "albertg.mahechar@utadeo.edu.co"  },
 { name = "Maria Fernanda Ospina Rocha (mf-ospina)", email ="m-ospina@utadeo.edu.co" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     "marimo>=0.17.6",
     "polars>=1.36.1",
@@ -24,3 +24,64 @@ flowtm = "flowtm:main"
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+# Python version supported by the project.
+target-version = "py312"
+
+# Maximum line length.
+line-length = 88
+
+# Directories Ruff should ignore.
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "__marimo__",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "N",
+    "A",
+    "C4",
+    "RET",
+    "RUF",
+]
+
+# Rules that are intentionally disabled.
+ignore = [
+    # Allow longer lines when necessary.
+    "E501"
+]
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/**/*.py" = ["N803"]
+
+# Automatically fix safe violations when using `ruff check --fix`.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+# Keep imports organized and deterministic.
+combine-as-imports = true
+force-wrap-aliases = true
+
+[tool.ruff.format]
+# Ruff formatter configuration.
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# Format code examples inside docstrings.
+docstring-code-format = true
