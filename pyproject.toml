@@ -3,6 +3,8 @@ name = "flowtm"
 version = "0.1.0"
 description = "Proyecto que propone mejorar GTFS de Transmilenio usando agentes de Inteligencia Artificial. Hecho para la asignatura de Inteligencia Artificial"
 readme = "README.md"
+license = "GPL-3.0-or-later AND CC-BY-4.0"
+license-files = ["LICENSE", "LICENSE-2"]
 authors = [
 { name = "Ludwig Alvarado (TheLudway)", email = "me@ludwigalvarado.me" },
 { name = "Kevin Adrian Pinilla Naranjo (KevinAPN)", email = "kevina.pinillan@utadeo.edu.co" },
@@ -11,7 +13,9 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-"marimo>=0.17.6",
+    "marimo>=0.17.6",
+    "polars>=1.36.1",
+    "ruff>=0.16.4",
 ]
 
 [project.scripts]
