@@ -12,7 +12,6 @@ def _():
 @app.cell
 def _():
     print("foo")
-    return
 
 
 if __name__ == "__main__":
