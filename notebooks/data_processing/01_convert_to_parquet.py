@@ -20,12 +20,12 @@ def _(Path):
 
 @app.cell
 def _(Path, pl):
-    RAW_DIR = Path("data/raw")
-    PROCESSED_DIR = Path("data/processed")
+    raw_dir = Path("data/raw")
+    processed_dir = Path("data/processed")
 
     def convert_file(input_path: Path) -> None:
-        relative_path = input_path.relative_to(RAW_DIR)
-        output_path = PROCESSED_DIR / relative_path.with_suffix(".parquet")
+        relative_path = input_path.relative_to(raw_dir)
+        output_path = processed_dir / relative_path.with_suffix(".parquet")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -42,7 +42,7 @@ def _(Path, pl):
         )
         df.write_parquet(output_path)
 
-    for input_path in RAW_DIR.rglob("*.txt"):
+    for input_path in raw_dir.rglob("*.txt"):
         convert_file(input_path)
 
 
