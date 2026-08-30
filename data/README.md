@@ -4,6 +4,136 @@ Aquí se coloca todo lo que es tema de datos relacionado con Transmilenio.
 
 ## GTFS
 
+
+```mermaid
+erDiagram
+
+    AGENCY {
+        INTEGER agency_id PK
+        STRING agency_name
+        STRING agency_url
+        STRING agency_timezone
+        STRING agency_lang
+        STRING agency_phone
+        STRING agency_fare_url
+    }
+
+    CALENDAR {
+        INTEGER service_id PK
+        INTEGER monday
+        INTEGER tuesday
+        INTEGER wednesday
+        INTEGER thursday
+        INTEGER friday
+        INTEGER saturday
+        INTEGER sunday
+        DATE start_date
+        DATE end_date
+    }
+
+    CALENDAR_DATES {
+        INTEGER service_id FK
+        DATE date
+        INTEGER exception_type
+    }
+
+    ROUTE {
+        INTEGER route_id PK
+        INTEGER agency_id FK
+        STRING route_color
+        STRING route_long_name
+        STRING route_short_name
+        STRING route_text_color
+        INTEGER route_type
+    }
+
+    TRIP {
+        STRING trip_id PK
+        INTEGER route_id FK
+        INTEGER service_id FK
+        INTEGER shape_id FK
+        STRING trip_headsign
+    }
+
+    STOP_TIME {
+        STRING trip_id FK
+        TIME arrival_time
+        TIME departure_time
+        INTEGER stop_id FK
+        INTEGER stop_sequence
+        STRING stop_headsign
+        INTEGER timepoint
+        FLOAT shape_dist_traveled
+    }
+
+    STOP {
+        INTEGER stop_id PK
+        INTEGER location_type
+        STRING parent_station FK
+        STRING stop_code
+        FLOAT stop_lat
+        FLOAT stop_lon
+        STRING stop_name
+        INTEGER wheelchair_boarding
+        STRING zone_id
+    }
+
+    SHAPE {
+        INTEGER shape_id PK
+        FLOAT shape_pt_lat
+        FLOAT shape_pt_lon
+        INTEGER shape_pt_sequence
+    }
+
+    FREQUENCY {
+        STRING trip_id FK
+        TIME start_time
+        TIME end_time
+        INTEGER headway_secs
+    }
+
+    FARE_ATTRIBUTE {
+        INTEGER fare_id PK
+        FLOAT price
+        STRING currency_type
+        INTEGER payment_method
+        INTEGER transfers
+        INTEGER agency_id FK
+        INTEGER transfer_duration
+    }
+
+    FEED_INFO {
+        STRING feed_publisher_name
+        DATE feed_start_date
+        STRING feed_version
+        DATE feed_end_date
+        STRING feed_lang
+        STRING feed_publisher_url
+        STRING feed_contact_email
+    }
+
+
+    AGENCY ||--o{ ROUTE : "opera"
+
+    AGENCY ||--o{ FARE_ATTRIBUTE : "define"
+
+    CALENDAR ||--o{ CALENDAR_DATES : "tiene excepciones"
+
+    CALENDAR ||--o{ TRIP : "programa"
+
+    ROUTE ||--o{ TRIP : "contiene"
+
+    SHAPE ||--o{ TRIP : "define trazado"
+
+    TRIP ||--o{ STOP_TIME : "tiene paradas"
+
+    STOP ||--o{ STOP_TIME : "es visitada en"
+
+    TRIP ||--o{ FREQUENCY : "tiene frecuencias"
+
+    STOP ||--o{ STOP : "contiene"
+```
+
 ### `agency.txt`
 
 | Campo             | Tipo    | Descripción                                                              |
