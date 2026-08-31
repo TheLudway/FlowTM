@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.24.0"
-app = marimo.App(width="medium", app_title="Exploración Validaciones")
+app = marimo.App(width="medium", app_title="Validation Exploration")
 
 
 @app.cell(hide_code=True)
@@ -15,26 +15,12 @@ def _():
 
 @app.cell(hide_code=True)
 def _(Path, pl):
-    # 1. Cargar muestra de Validaciones (Torniquetes Troncal)
+    # 1. Load validation sample (Tullave card entries)
     archivos_val = sorted(
         [
             str(p)
             for p in Path("data/processed").rglob("*.parquet")
-            if p.name
-            not in [
-                "agency.parquet",
-                "calendar.parquet",
-                "calendar_dates.parquet",
-                "fare_attributes.parquet",
-                "feed_info.parquet",
-                "frequencies.parquet",
-                "routes.parquet",
-                "shapes.parquet",
-                "stop_times.parquet",
-                "stops.parquet",
-                "trips.parquet",
-            ]
-            and "20260825" not in p.name
+            if p.stem.isdigit() and "20260825" not in p.name
         ]
     )
 
@@ -45,7 +31,7 @@ def _(Path, pl):
 
 @app.cell(hide_code=True)
 def _(pl, validaciones):
-    # 2. Top 15 Estaciones con mayor demanda en el día
+    # 2. Top 15 Stations with highest passenger demand
     col_estacion = next(
         (c for c in validaciones.columns if "estacion" in c.lower()),
         "Estacion_Parada",
@@ -62,7 +48,7 @@ def _(pl, validaciones):
 
 @app.cell(hide_code=True)
 def _(pl, validaciones):
-    # 3. Distribución por Perfil de Tarjeta (Adulto, Sisbén, etc.)
+    # 3. Distribution by Card Profile (Adult, Subsidized, Senior, etc.)
     col_perfil = next(
         (c for c in validaciones.columns if "perfil" in c.lower()),
         "Nombre_Perfil",
@@ -78,7 +64,7 @@ def _(pl, validaciones):
 
 @app.cell(hide_code=True)
 def _(Path, pl):
-    # 4. Cargar muestra de Salidas (Torniquetes por cuarto de hora)
+    # 4. Load turnstile output sample (Quarter-hour counts)
     archivos_sal = sorted(
         [
             str(p)

@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.24.0"
-app = marimo.App(width="medium", app_title="Conversión a Parquet")
+app = marimo.App(width="medium", app_title="Convert to Parquet")
 
 
 @app.cell
@@ -53,13 +53,13 @@ def _(Path, contextlib, pl):
         relative_path = input_path.relative_to(raw_dir)
         output_path = processed_dir / relative_path.with_suffix(".parquet")
 
-        # Si el archivo parquet ya existe, no gastar tiempo re-procesándolo
+        # Skip conversion if output parquet file already exists
         if output_path.exists():
-            print(f"Saltando GTFS (ya existe): {output_path}")
+            print(f"Skipping GTFS (already exists): {output_path}")
             return
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        print(f"Convirtiendo GTFS: {input_path} -> {output_path}")
+        print(f"{input_path} -> {output_path}")
 
         df = pl.read_csv(
             input_path,
@@ -112,15 +112,15 @@ def _(Path, contextlib, pl):
         relative_path = input_path.relative_to(raw_dir)
         output_path = processed_dir / relative_path.with_suffix(".parquet")
 
-        # Si el archivo parquet ya existe, no gastar tiempo re-procesándolo
+        # Skip conversion if output parquet file already exists
         if output_path.exists():
-            print(f"Saltando CSV (ya existe): {output_path}")
+            print(f"Skipping CSV (already exists): {output_path}")
             return
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        print(f"Convirtiendo CSV: {input_path} -> {output_path}")
+        print(f"{input_path} -> {output_path}")
 
-        # Lectura con inferencia amplia de tipos para validaciones y salidas
+        # Read CSV with wide schema inference for validations and outputs
         df = pl.read_csv(
             input_path,
             infer_schema_length=10000,
@@ -128,7 +128,7 @@ def _(Path, contextlib, pl):
             null_values=["", "NA", "N/A", "null", "NULL"],
         )
 
-        # Convertir columnas que contengan fechas o marcas de tiempo
+        # Convert date and timestamp columns
         for column in df.columns:
             col_lower = column.lower().strip()
             if "fecha" in col_lower:
@@ -143,7 +143,7 @@ def _(Path, contextlib, pl):
     for input_path in raw_dir.rglob("*.txt"):
         convert_gtfs_file(input_path)
 
-    # Convert CSV files (Validaciones y Salidas)
+    # Convert CSV files (Validations and Outputs)
     for input_path in raw_dir.rglob("*.csv"):
         convert_csv_file(input_path)
 
