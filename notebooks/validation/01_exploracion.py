@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.24.0"
-app = marimo.App(width="medium", app_title="Exploración de Validaciones y Salidas")
+app = marimo.App(width="medium", app_title="Exploración Validaciones")
 
 
 @app.cell(hide_code=True)
@@ -14,122 +14,82 @@ def _():
 
 
 @app.cell(hide_code=True)
-def _(Path):
-    processed_dir = Path("data/processed")
-
-    # Filtro blindado: Excluye GTFS y solo busca archivos de validaciones y salidas
+def _(Path, pl):
+    # 1. Cargar muestra de Validaciones (Torniquetes Troncal)
     archivos_val = sorted(
         [
             str(p)
-            for p in processed_dir.rglob("*.parquet")
-            if "gtfs" not in str(p).lower() and "valida" in str(p).lower()
+            for p in Path("data/processed").rglob("*.parquet")
+            if p.name
+            not in [
+                "agency.parquet",
+                "calendar.parquet",
+                "calendar_dates.parquet",
+                "fare_attributes.parquet",
+                "feed_info.parquet",
+                "frequencies.parquet",
+                "routes.parquet",
+                "shapes.parquet",
+                "stop_times.parquet",
+                "stops.parquet",
+                "trips.parquet",
+            ]
+            and "20260825" not in p.name
         ]
     )
 
+    validaciones = pl.read_parquet(archivos_val[0])
+    validaciones
+    return archivos_val, validaciones
+
+
+@app.cell(hide_code=True)
+def _(pl, validaciones):
+    # 2. Top 15 Estaciones con mayor demanda en el día
+    col_estacion = next(
+        (c for c in validaciones.columns if "estacion" in c.lower()),
+        "Estacion_Parada",
+    )
+    top_estaciones = (
+        validaciones.group_by(col_estacion)
+        .agg(pl.len().alias("total_validaciones"))
+        .sort("total_validaciones", descending=True)
+        .head(15)
+    )
+    top_estaciones
+    return col_estacion, top_estaciones
+
+
+@app.cell(hide_code=True)
+def _(pl, validaciones):
+    # 3. Distribución por Perfil de Tarjeta (Adulto, Sisbén, etc.)
+    col_perfil = next(
+        (c for c in validaciones.columns if "perfil" in c.lower()),
+        "Nombre_Perfil",
+    )
+    perfiles = (
+        validaciones.group_by(col_perfil)
+        .agg(pl.len().alias("cantidad_usuarios"))
+        .sort("cantidad_usuarios", descending=True)
+    )
+    perfiles
+    return col_perfil, perfiles
+
+
+@app.cell(hide_code=True)
+def _(Path, pl):
+    # 4. Cargar muestra de Salidas (Torniquetes por cuarto de hora)
     archivos_sal = sorted(
         [
             str(p)
-            for p in processed_dir.rglob("*.parquet")
-            if "gtfs" not in str(p).lower() and "salida" in str(p).lower()
+            for p in Path("data/processed").rglob("*.parquet")
+            if "20260825" in p.name or "salida" in p.name.lower()
         ]
     )
 
-    return archivos_sal, archivos_val, processed_dir
-
-
-@app.cell
-def _(archivos_val, pl):
-    # 1. Cargar y visualizar muestra de Validaciones Troncales
-    df_validaciones = None
-    muestra_validaciones = None
-
-    if archivos_val:
-        df_validaciones = pl.scan_parquet(archivos_val)
-        muestra_validaciones = df_validaciones.head(10).collect()
-
-    muestra_validaciones
-    return df_validaciones, muestra_validaciones
-
-
-@app.cell
-def _(df_validaciones, pl):
-    # 2. Top 15 Estaciones con mayor volumen de validaciones (Demanda de usuarios)
-    top_estaciones = None
-
-    if df_validaciones is not None:
-        col_estacion = next(
-            (c for c in df_validaciones.columns if "estacion" in c.lower()),
-            None,
-        )
-        if col_estacion:
-            top_estaciones = (
-                df_validaciones.group_by(col_estacion)
-                .agg(pl.len().alias("total_validaciones"))
-                .sort("total_validaciones", descending=True)
-                .head(15)
-                .collect()
-            )
-
-    top_estaciones
-    return (top_estaciones,)
-
-
-@app.cell
-def _(df_validaciones, pl):
-    # 3. Distribución por Perfil de Tarjeta (Adulto, Sisbén, Adulto Mayor, etc.)
-    perfiles = None
-
-    if df_validaciones is not None:
-        col_perfil = next(
-            (c for c in df_validaciones.columns if "perfil" in c.lower()),
-            None,
-        )
-        if col_perfil:
-            perfiles = (
-                df_validaciones.group_by(col_perfil)
-                .agg(pl.len().alias("cantidad_transacciones"))
-                .sort("cantidad_transacciones", descending=True)
-                .collect()
-            )
-
-    perfiles
-    return (perfiles,)
-
-
-@app.cell
-def _(archivos_sal, pl):
-    # 4. Cargar y visualizar muestra de Salidas y Torniquetes
-    df_salidas = None
-    muestra_salidas = None
-
-    if archivos_sal:
-        df_salidas = pl.scan_parquet(archivos_sal)
-        muestra_salidas = df_salidas.head(10).collect()
-
-    muestra_salidas
-    return df_salidas, muestra_salidas
-
-
-@app.cell
-def _(df_salidas, pl):
-    # 5. Resumen de Entradas vs Salidas totales registradas en torniquetes
-    balance_torniquetes = None
-
-    if df_salidas is not None:
-        cols = df_salidas.columns
-        col_entradas = next((c for c in cols if "entradas" in c.lower()), None)
-        col_salidas = next((c for c in cols if "salidas" in c.lower()), None)
-
-        if col_entradas and col_salidas:
-            balance_torniquetes = df_salidas.select(
-                [
-                    pl.col(col_entradas).sum().alias("total_entradas"),
-                    pl.col(col_salidas).sum().alias("total_salidas"),
-                ]
-            ).collect()
-
-    balance_torniquetes
-    return (balance_torniquetes,)
+    salidas = pl.read_parquet(archivos_sal[0]) if archivos_sal else None
+    salidas
+    return archivos_sal, salidas
 
 
 if __name__ == "__main__":
