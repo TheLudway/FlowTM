@@ -61,19 +61,19 @@ uv run ruff check .
 ### Conexion VPN
 instalar y al momento de iniciar darle a "Upload File"
 
-![alt text](assets/inicio_cliente.png)
+<img src="assets/inicio_cliente.png" alt="alt text" width="200">
 
 Se seleciona archivo .ovpn que envia Ludwig y se importa
 
-![alt text](assets/seleccionar_archivo_ovpn.png)
+<img src="assets/seleccionar_archivo_ovpn.png" alt="alt text" width="300">
 
 Se le da "Connect" 
 
-![alt text](assets/conexion.png)
+<img src="assets/conexion.png" alt="alt text" width="200">
 
 Se ingresa contraseña que Ludwig envia por interno 
 
-![alt text](assets/ingreso_contraseña.png)
+<img src="assets/ingreso_contraseña.png" alt="alt text" width="200">
 
 Y con eso ya tendrian la conexion al servidor
 
