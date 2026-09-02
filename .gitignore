@@ -17,4 +17,4 @@ wheels/
 *.parquet
 
 # Secrets
-infraestructure/docker/secrets/
+infrastructure/docker/secrets/
