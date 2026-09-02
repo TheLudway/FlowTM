@@ -1,0 +1,13 @@
+[project]
+name = "transport-loader"
+version = "0.1.0"
+description = "Load Parquet datasets into PostgreSQL/PostGIS and DuckDB"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb",
+    "psycopg[binary]",
+    "pyarrow",
+]
+
+[tool.uv]
+package = false
