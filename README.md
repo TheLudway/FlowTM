@@ -55,3 +55,4 @@ Para utilizar [ruff](https://docs.astral.sh/ruff/) y verificar el estilo del có
 uv run ruff check .
 ```
 
+prueba
