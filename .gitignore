@@ -15,3 +15,6 @@ wheels/
 *.zip
 *.csv
 *.parquet
+
+# Secrets
+infraestructure/docker/secrets/
