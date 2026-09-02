@@ -295,56 +295,105 @@ erDiagram
 
 ## ValidacionesSalidas 
 
+Estas tablas registran la afluencia empírica de pasajeros en el componente Troncal mediante transacciones de tarjetas Tullave y conteo de torniquetes. Son el insumo principal para modelar la **tasa de llegada de pasajeros ($\lambda$)** por estación y hora que alimenta el modelo del **Agente Racional**.
+
+```mermaid
+erDiagram
+    STOP ||--o{ VALIDACIONES_TRONCAL : "registra abordajes de usuarios"
+    STOP ||--o{ SALIDAS_TRONCAL : "registra flujo por torniquete"
+    INFRA_TRONCAL ||--|| STOP : "define capacidad fisica"
+
+    VALIDACIONES_TRONCAL {
+        STRING Acceso_Estacion
+        STRING Day_Group_Type
+        INTEGER Dispositivo
+        STRING Emisor
+        STRING Estacion_Parada FK
+        STRING Fase
+        DATE Fecha_Clearing
+        TIMESTAMP Fecha_Transaccion
+        STRING Hora_Pico_SN
+        STRING ID_Vehiculo
+        STRING Linea
+        STRING Nombre_Perfil
+        STRING Numero_Tarjeta
+        STRING Operador
+        STRING Ruta
+        FLOAT Saldo_Despues_Transaccion
+        FLOAT Saldo_Previo_a_Transaccion
+        STRING Sistema
+        STRING Tipo_Tarifa
+        STRING Tipo_Tarjeta
+        STRING Tipo_Vehiculo
+        FLOAT Valor
+    }
+
+    SALIDAS_TRONCAL {
+        DATE Fecha_Transaccion
+        TIME Tiempo
+        STRING Linea
+        STRING Estacion FK
+        STRING Acceso_Estacion
+        INTEGER Dispositivo
+        INTEGER Entradas_E
+        INTEGER Salidas_S
+    }
+```
+    Nota de Estandarización: En ambas tablas, los nombres de estación inician con un código numérico oficial de 5 dígitos entre paréntesis (XXXXX) (ej. (08000) Portal Tunal o (07503)SAN MATEO). Este código numérico se extrae mediante regex r"\((\d{5})\)" para realizar el cruce relacional exacto con stop_code en stops.txt (GTFS) y num_est en InfraTroncal.
+
 ### Validaciones diarias al sistema troncal
 
 
-| Nombre del Campo             | Tipo      | Descripción                                                          |
-|------------------------------|-----------|----------------------------------------------------------------------|
-| `Acceso_Estacion`            | STRING    | Acceso de la estación. Solo aplica para troncal.                     |
-| `Day_Group_Type`             | STRING    | Tipo de día.                                                         |
-| `Dispositivo`                | STRING    | Identificador del dispositivo.                                       |
-| `Emisor`                     | STRING    | Emisor de la tarjeta.                                                |
-| `Estacion_Parada`            | STRING    | Estación o parada donde ocurrió la validación.                       |
-| `Fase`                       | STRING    | Fase a la que pertenece.                                             |
-| `Fecha_Clearing`             | DATE      | Fecha en la que llegó el registro al sistema.                        |
-| `Fecha_Transaccion`          | TIMESTAMP | Fecha en la que ocurrió la transacción.                              |
-| `Hora_Pico_SN`               | STRING    | Hora pico.                                                           |
-| `ID_Vehiculo`                | STRING    | Identificador del vehículo. Solo aplica para Zonal y Dual.           |
-| `Linea`                      | STRING    | Línea. En troncal son las zonas; en zonal son las rutas comerciales. |
-| `Nombre_Perfil`              | STRING    | Nombre del perfil de la tarjeta. Ver tabla de perfiles.              |
-| `Numero_Tarjeta`             | STRING    | Número de tarjeta.                                                   |
-| `Operador`                   | STRING    | Operador del servicio. Para troncal: Trunk Agency.                   |
-| `Ruta`                       | STRING    | Ruta. Solo aplica para zonal.                                        |
-| `Saldo Despues Transaccion`  | FLOAT     | Saldo después de la transacción.                                     |
-| `Saldo_Previo_a_Transaccion` | FLOAT     | Saldo previo a la transacción.                                       |
-| `Tipo_Tarifa`                | STRING    | Tipo de tarifa.                                                      |
-| `Tipo_Tarjeta`               | STRING    | Tipo de tarjeta.                                                     |
-| `Tipo_Vehiculo`              | STRING    | Tipo de vehículo. Solo aplica para zonal.                            |
-| `Valor`                      | FLOAT     | Valor de la transacción.                                             |
+| **Nombre del Campo**         | **Tipo**  | **Descripción**                                                       |
+| ---------------------------- | --------- | --------------------------------------------------------------------- |
+| `Acceso_Estacion`            | STRING    | Acceso o plataforma física a la estación.                             |
+| `Day_Group_Type`             | STRING    | Tipo de día de operación (`Dia 1`, `Dia 2`, etc.).                    |
+| `Dispositivo`                | INTEGER   | Identificador numérico del validador de torniquete.                   |
+| `Emisor`                     | STRING    | Entidad emisora de la tarjeta con código de lote.                     |
+| `Estacion_Parada`            | STRING    | Estación troncal con formato `(CODIGO) Nombre`.                       |
+| `Fase`                       | STRING    | Fase del sistema TransMilenio (Fase 1, Fase 2, Fase 3).               |
+| `Fecha_Clearing`             | DATE      | Fecha contable de liquidación en el sistema.                          |
+| `Fecha_Transaccion`          | TIMESTAMP | Fecha y hora exacta en que ocurrió la transacción de abordaje.        |
+| `Hora_Pico_SN`               | STRING    | Clasificación horaria (`Peak Time` / `Non Peak Time`).                |
+| `ID_Vehiculo`                | STRING    | Identificador del vehículo. 100% nulo en troncal (aplica para zonal). |
+| `Linea`                      | STRING    | Troncal asociada con código de zona: `(COD) Nombre Troncal`.          |
+| `Nombre_Perfil`              | STRING    | Nombre del perfil de la tarjeta. Ver tabla de perfiles.               |
+| `Numero_Tarjeta`             | STRING    | Hash alfanumérico anonimizado de la tarjeta.                          |
+| `Operador`                   | STRING    | Operador del servicio. Para troncal: `(201) Trunk agency`.            |
+| `Ruta`                       | STRING    | Ruta. 100% nulo en troncal (la validación ocurre en estación).        |
+| `Saldo_Despues_Transaccion`  | FLOAT     | Saldo en tarjeta después de la transacción.                           |
+| `Saldo_Previo_a_Transaccion` | FLOAT     | Saldo en tarjeta previo a la transacción.                             |
+| `Sistema`                    | STRING    | Componente del sistema (`TRONCAL`).                                   |
+| `Tipo_Tarifa`                | STRING    | Tipo de tarifa aplicada (`1,0`).                                      |
+| `Tipo_Tarjeta`               | STRING    | Tipo de tarjeta (`tullave Plus`, `tullave Basica`).                   |
+| `Tipo_Vehiculo`              | STRING    | Tipo de vehículo. 100% nulo en troncal.                               |
+| `Valor`                      | FLOAT     | Valor debitado de la transacción en COP.                              |
+
     
 #### Perfiles de `Nombre_Perfil`:
 
-| Nombre del Perfil                    | Descripción                                                                 |
-|--------------------------------------|-----------------------------------------------------------------------------|
-| `(001) Anonymous`                    | Tarjeta NO personalizada.                                                   |
-| `(001) Adulto`                       | Tarjeta personalizada.                                                      |
-| `(002) Adulto Mayor`                 | Tarjeta personalizada con subsidio a personas mayores de 62 años.           |
-| `(005) Discapacidad`                 | Tarjeta personalizada con subsidio a personas en condición de discapacidad. |
-| `(006) Apoyo Ciudadano`              | Tarjeta personalizada con subsidio a personas en el SISBEN.                 |
-| `(009) Apoyo Ciudadano Reexpedición` | Tarjeta personalizada con subsidio a personas en el SISBEN.                 |
-| `(101) Adulto PV`                    | Tarjeta personalizada virtualmente (personalización virtual).               |
+| **Nombre del Perfil**                | **Descripción**                                               |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `(001) Anonymous`                    | Tarjeta NO personalizada.                                     |
+| `(001) Adulto`                       | Tarjeta personalizada.                                        |
+| `(002) Adulto Mayor`                 | Tarjeta con subsidio a personas mayores de 62 años.           |
+| `(005) Discapacidad`                 | Tarjeta con subsidio a personas en condición de discapacidad. |
+| `(006) Apoyo Ciudadano`              | Tarjeta con subsidio a personas en el SISBEN.                 |
+| `(009) Apoyo Ciudadano Reexpedición` | Tarjeta con subsidio a personas en el SISBEN.                 |
+| `(101) Adulto PV`                    | Tarjeta con personalización virtual.                          |
 
 
 ### Salidas diarias al sistema troncal
 
-| Nombre del Campo    | Tipo    | Descripción                                                 |
-|---------------------|---------|-------------------------------------------------------------|
-| `Fecha_Transaccion` | DATE    | Fecha en que se presentó la salida.                         |
-| `Tiempo`            | TIME    | Cuarto de hora asociado a la salida.                        |
-| `Linea`             | STRING  | Troncal asociada a la salida.                               |
-| `Estacion`          | STRING  | Estación o parada donde ocurrió la salida.                  |
-| `Acceso_Estacion`   | STRING  | Nombre del acceso de estación.                              |
-| `Dispositivo`       | STRING  | Identificador del dispositivo.                              |
-| `Entradas_E`        | INTEGER | Cantidad de vueltas del torniquete en dirección de entrada. |
-| `Salidas_S`         | INTEGER | Cantidad de vueltas del torniquete en dirección de salida.  |
+| **Nombre del Campo** | **Tipo** | **Descripción**                                             |
+| -------------------- | -------- | ----------------------------------------------------------- |
+| `Fecha_Transaccion`  | DATE     | Fecha en que se presentó la salida (`YYYY-MM-DD`).          |
+| `Tiempo`             | TIME     | Cuarto de hora asociado a la salida (`HH:MM:SS`).           |
+| `Linea`              | STRING   | Troncal asociada a la salida con código de zona.            |
+| `Estacion`           | STRING   | Estación o parada con formato `(CODIGO) Nombre`.            |
+| `Acceso_Estacion`    | STRING   | Nombre o número del acceso de estación.                     |
+| `Dispositivo`        | INTEGER  | Identificador numérico del dispositivo torniquete.          |
+| `Entradas_E`         | INTEGER  | Cantidad de vueltas del torniquete en dirección de entrada. |
+| `Salidas_S`          | INTEGER  | Cantidad de vueltas del torniquete en dirección de salida.  |
+
 
