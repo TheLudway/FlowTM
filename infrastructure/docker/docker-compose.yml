@@ -35,7 +35,7 @@ services:
     build:
       context: ./loader
 
-    container-name: transport-loader
+    container_name: transport-loader
 
     depends_on:
       postgres:
@@ -84,7 +84,7 @@ services:
     container_name: transport-duckdb
 
     volumes:
-      - ../data:/data:ro
+      - ../../data/processed:/data:ro
       - ./duckdb:/database
 
     working_dir: /database
@@ -94,11 +94,11 @@ services:
 
 volumes:
   postgres_data:
+  pgadmin_data:
 
 
 secrets:
   postgres_password:
     file: ./secrets/postgres_password
-
   pgadmin_password:
     file: ./secrets/pgadmin_password
