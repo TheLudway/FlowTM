@@ -293,7 +293,7 @@ erDiagram
 | `cap_art`        | INTEGER | Corresponde a la capacidad para ART B.                                                                                                                     |
 | `observ`         | STRING  | Corresponde a las notas adicionales sobre la estación.                                                                                                     |
 
-## ValidacionesSalidas
+## ValidacionesSalidas 
 
 Estas tablas registran la afluencia empírica de pasajeros en el componente Troncal mediante transacciones de tarjetas Tullave y conteo de torniquetes. Son el insumo principal para modelar la **tasa de llegada de pasajeros ($\lambda$)** por estación y hora que alimenta el modelo del **Agente Racional**.
 
@@ -304,20 +304,39 @@ erDiagram
     INFRA_TRONCAL ||--|| STOP : "define capacidad fisica"
 
     VALIDACIONES_TRONCAL {
-        TIMESTAMP Fecha_Transaccion "Timestamp exacto del viaje"
-        STRING Estacion_Parada FK "Cruce via código (XXXXX) con STOP.stop_code"
-        STRING Linea "Troncal asociada: (COD) Zona"
-        STRING Hora_Pico_SN "Clasificación horaria (Peak Time / Non Peak Time)"
-        STRING Nombre_Perfil "Perfil tarifario del usuario"
-        FLOAT Valor "Tarifa cobrada en COP"
+        STRING Acceso_Estacion
+        STRING Day_Group_Type
+        INTEGER Dispositivo
+        STRING Emisor
+        STRING Estacion_Parada FK
+        STRING Fase
+        DATE Fecha_Clearing
+        TIMESTAMP Fecha_Transaccion
+        STRING Hora_Pico_SN
+        STRING ID_Vehiculo
+        STRING Linea
+        STRING Nombre_Perfil
+        STRING Numero_Tarjeta
+        STRING Operador
+        STRING Ruta
+        FLOAT Saldo_Despues_Transaccion
+        FLOAT Saldo_Previo_a_Transaccion
+        STRING Sistema
+        STRING Tipo_Tarifa
+        STRING Tipo_Tarjeta
+        STRING Tipo_Vehiculo
+        FLOAT Valor
     }
 
     SALIDAS_TRONCAL {
-        DATE Fecha_Transaccion "Fecha del registro"
-        TIME Tiempo "Franja de 15 minutos (HH:MM:SS)"
-        STRING Estacion FK "Cruce via código (XXXXX) con STOP.stop_code"
-        INTEGER Entradas_E "Total ingresos torniquete en franja"
-        INTEGER Salidas_S "Total egresos torniquete en franja"
+        DATE Fecha_Transaccion
+        TIME Tiempo
+        STRING Linea
+        STRING Estacion FK
+        STRING Acceso_Estacion
+        INTEGER Dispositivo
+        INTEGER Entradas_E
+        INTEGER Salidas_S
     }
 ```
     Nota de Estandarización: En ambas tablas, los nombres de estación inician con un código numérico oficial de 5 dígitos entre paréntesis (XXXXX) (ej. (08000) Portal Tunal o (07503)SAN MATEO). Este código numérico se extrae mediante regex r"\((\d{5})\)" para realizar el cruce relacional exacto con stop_code en stops.txt (GTFS) y num_est en InfraTroncal.
