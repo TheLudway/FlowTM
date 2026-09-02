@@ -55,3 +55,26 @@ Para utilizar [ruff](https://docs.astral.sh/ruff/) y verificar el estilo del có
 uv run ruff check .
 ```
 
+# VPN
+ descargar OpenVPN client link [aqui](https://openvpn.net/connect-docs/connect-for-windows.html#alternative-installation-methods-56623) es el .msi
+
+### Conexion VPN
+instalar y al momento de iniciar darle a "Upload File"
+
+![alt text](assets/inicio_cliente.png)
+
+Se seleciona archivo .ovpn que envia Ludwig y se importa
+
+![alt text](assets/seleccionar_archivo_ovpn.png)
+
+Se le da "Connect" 
+
+![alt text](assets/conexion.png)
+
+Se ingresa contraseña que Ludwig envia por interno 
+
+![alt text](assets/ingreso_contraseña.png)
+
+Y con eso ya tendrian la conexion al servidor
+
+
