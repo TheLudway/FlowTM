@@ -83,13 +83,31 @@ services:
     image: duckdb/duckdb:1.5.5
     container_name: transport-duckdb
 
+    depends_on:
+      loader:
+        condition: service_completed_successfully
+
     volumes:
       - ../../data/processed:/data:ro
       - ./duckdb:/database
 
+    environment:
+      QUACK_TOKEN: ${QUACK_TOKEN:?Set QUACK_TOKEN in infrastructure/docker/.env}
+
+    ports:
+      - "9494:9494"
+
+    stdin_open: true
+    tty: true
+
     working_dir: /database
 
-    entrypoint: ["duckdb"]
+    entrypoint:
+      - duckdb
+      - /database/transport.duckdb
+      - -init
+      - /database/init.sql
+      - -interactive
 
 
 volumes:
