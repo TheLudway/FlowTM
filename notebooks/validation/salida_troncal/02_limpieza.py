@@ -2,6 +2,7 @@ from pathlib import Path
 
 import polars as pl
 
+# --- ETL Processing (Phase 5) - Salida troncal ---
 
 def normalizar_estaciones(columna: str) -> list[pl.Expr]:
     """Apply vectorized Polars expressions to extract keys and normalize station names."""
@@ -10,9 +11,9 @@ def normalizar_estaciones(columna: str) -> list[pl.Expr]:
         pl.col(columna)
         .str.extract(r"\((\d{5})\)", 1)
         .alias("CODIGO_ESTACION"),
-        # 2. Extract 2-digit trunk code
+        # 2. Extract 2-digit trunk code (primeros 2 dígitos dentro del paréntesis de 5 dígitos)
         pl.col(columna)
-        .str.extract(r"\((\d{2})\)\d{3}", 1)
+        .str.extract(r"\((\d{2})\d{3}\)", 1)
         .alias("CODIGO_TRONCAL"),
         # 3. Clean canonical station name
         (
@@ -38,7 +39,6 @@ def ejecutar_etl_salidas():
         project_root / "data/processed/validaciones_salidas/salidas_troncal"
     )
 
-    # Discover original turnstile output Parquet files (excluding previous _clean files)
     try:
         archivos_salidas = [
             p
@@ -52,9 +52,11 @@ def ejecutar_etl_salidas():
         print(f"[ERROR] Failed to scan directory {ruta_salidas}: {e}")
         return
 
-    # Specific target columns for turnstile outputs
     cols_utiles_salidas = [
+        "Fecha_Transaccion",
         "Tiempo",
+        "Linea",
+        "Acceso_Estacion",
         "Entradas_E",
         "Salidas_S",
     ]
@@ -63,11 +65,9 @@ def ejecutar_etl_salidas():
         try:
             print(f"[PROCESSING] Starting processing for file: {p.name}")
 
-            # Lazy evaluation reading
             lf = pl.scan_parquet(p)
             cols_existentes = lf.collect_schema().names()
 
-            # Identify station column dynamically
             col_est = (
                 "Estacion"
                 if "Estacion" in cols_existentes
@@ -82,23 +82,18 @@ def ejecutar_etl_salidas():
                     f"No station column found in schema for file {p.name}"
                 )
 
-            # Select turnstile target metrics present in the schema
             cols_a_conservar = [
                 c for c in cols_utiles_salidas if c in cols_existentes
             ]
 
-            # Apply vectorized normalization expressions alongside target metrics
             lf_clean = lf.select(
                 cols_a_conservar + normalizar_estaciones(col_est)
             )
 
-            # Collect lazy computation into eager DataFrame
             df_clean = lf_clean.collect()
 
-            # Target output path definition with _clean suffix in salidas_troncal
             ruta_salida = p.with_name(f"{p.stem}_clean.parquet")
 
-            # Export processed clean data with ZSTD compression
             df_clean.write_parquet(ruta_salida, compression="zstd")
 
             print(

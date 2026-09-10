@@ -1,8 +1,8 @@
-# --- ETL Processing (Phase 5) - Validacion troncal ---
 from pathlib import Path
 
 import polars as pl
 
+# --- ETL Processing (Phase 5) - Validacion troncal ---
 
 def normalizar_estaciones(columna: str) -> list[pl.Expr]:
     """Apply vectorized Polars expressions to extract keys and normalize station names."""
@@ -13,7 +13,7 @@ def normalizar_estaciones(columna: str) -> list[pl.Expr]:
         .alias("CODIGO_ESTACION"),
         # 2. Extract 2-digit trunk code
         pl.col(columna)
-        .str.extract(r"\((\d{2})\)\d{3}", 1)
+        .str.extract(r"\((\d{2})\d{3}\)", 1)
         .alias("CODIGO_TRONCAL"),
         # 3. Clean canonical station name
         (
