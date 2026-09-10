@@ -22,10 +22,8 @@ def _():
 @app.cell
 def _(mo):
     mo.md(r"""
-    # FlowTM — Auditoría y Exploración: Validaciones Troncales
-    *Proyecto:* Agente Racional para Optimización de Frecuencias en TransMilenio
+    # Auditoría y Exploración: Validaciones Troncales
     *Componente:* Ingesta y Diagnóstico de Datos (validacion_troncal)
-    *Motor:* Polars (Lazy & Eager) & Marimo
     """)
     return
 
@@ -95,7 +93,6 @@ def _(df_v, mo, pl):
     if "df_v" in globals() and df_v is not None:
         cols = df_v.columns
 
-        # 1. Sample of Stations (to demonstrate the pattern (XXXXX))
         col_est = "Estacion_Parada" if "Estacion_Parada" in cols else next((c for c in cols if "estacion" in c.lower()), None)
         m_estaciones = (
             df_v.select(col_est).unique().head(8)
@@ -103,21 +100,18 @@ def _(df_v, mo, pl):
             else pl.DataFrame({"Info": ["No se halló columna de estación"]})
         )
 
-        # 2. Time Slot Count (Peak vs. Off-Peak)
         m_picos = (
             df_v["Hora_Pico_SN"].value_counts()
             if "Hora_Pico_SN" in cols
             else pl.DataFrame({"Info": ["Sin Hora_Pico_SN"]})
         )
 
-        # 3. Count of Day Types (Weekday, Saturday, Public Holiday)
         m_dias = (
             df_v["Day_Group_Type"].value_counts()
             if "Day_Group_Type" in cols
             else pl.DataFrame({"Info": ["Sin Day_Group_Type"]})
         )
 
-       # 4. Sample User Profiles (Tuave, Student, etc.)
         m_perfiles = (
             df_v["Nombre_Perfil"].value_counts().head(6)
             if "Nombre_Perfil" in cols
@@ -126,7 +120,7 @@ def _(df_v, mo, pl):
     else:
         m_estaciones = m_picos = m_dias = m_perfiles = pl.DataFrame({"Error": ["df_v no disponible"]})
 
-    # Layout Marimo
+    # Layout
     vista_fase2 = mo.vstack([
         mo.md("## Fase 2: Exploración de Patrones Categóricos en Validaciones"),
         mo.md("#### 1. Patrón en Nombres de Estaciones (Muestra)"),
@@ -139,7 +133,6 @@ def _(df_v, mo, pl):
         mo.ui.table(m_perfiles)
     ])
 
-    # Renderizado final
     vista_fase2
     return
 
@@ -183,25 +176,21 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ##Fase 4: Función Universal de Normalización (Polars), se formula la expresión vectorizada de Polars que realiza la extracción del código de 5 dígitos, genera el código de troncal de 2 dígitos y limpian el nombre canónico de la estación
+    ##Fase 4: Función Universal de Normalización, se formula la expresión vectorizada de Polars que realiza la extracción del código de 5 dígitos, genera el código de troncal de 2 dígitos y limpian el nombre canónico de la estación
     """)
     return
 
 
 @app.cell
 def _(df_v, mo, pl):
-    # 1. Definition of the vectorized function in Polars
     def normalizar_estaciones(columna: str) -> list[pl.Expr]:
         return [
-            # a. Extract the exact 5-digit numeric code
             pl.col(columna)
             .str.extract(r"\((\d{5})\)", 1)
             .alias("CODIGO_ESTACION"),
-           # b. Extract the trunk code (first 2 digits)
             pl.col(columna)
             .str.extract(r"\((\d{2})\)\d{3}", 1)
             .alias("CODIGO_TRONCAL"),
-            # c. Clean the canonical text name
             (
                 pl.col(columna)
                 .str.replace(r"^\(\d+\)\s*", "")
@@ -218,7 +207,6 @@ def _(df_v, mo, pl):
         ]
 
 
-    #2. Testing the transformation over df_v with unique variable names
     if "df_v" in globals() and df_v is not None:
         cols_f4 = df_v.columns
         col_est_f4 = (
@@ -227,7 +215,6 @@ def _(df_v, mo, pl):
             else next((c for c in cols_f4 if "estacion" in c.lower()), cols_f4[0])
         )
 
-       # Apply Polars expressions and obtain a unique sample of stations
         muestra_norm = (
             df_v.select([col_est_f4, *normalizar_estaciones(col_est_f4)])
             .unique(subset=["CODIGO_ESTACION"])
@@ -239,7 +226,6 @@ def _(df_v, mo, pl):
             {"Error": ["df_v no está disponible para probar la normalización"]}
         )
 
-    # 3. Building the interface component for Marimo
     vista_fase4 = mo.vstack([
         mo.md(
             "## Fase 4: Función Universal de Normalización de Estaciones"
