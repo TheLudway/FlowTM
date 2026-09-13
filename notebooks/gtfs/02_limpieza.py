@@ -22,21 +22,60 @@ def _(mo):
 
 @app.cell
 def _():
+    from pathlib import Path
+
     import marimo as mo
     import polars as pl
 
-    return mo, pl
+    return Path, mo, pl
 
 
 @app.cell
-def _(pl):
-    agencias = pl.read_parquet("../../data/processed/gtfs/gtfs_20260727/agency.parquet")
-    routes = pl.read_parquet("../../data/processed/gtfs/gtfs_20260727/routes.parquet")
-    shapes = pl.read_parquet("../../data/processed/gtfs/gtfs_20260727/shapes.parquet")
-    stop_times = pl.read_parquet("../../data/processed/gtfs/gtfs_20260727/stop_times.parquet")
-    stops = pl.read_parquet("../../data/processed/gtfs/gtfs_20260727/stops.parquet")
-    trips = pl.read_parquet("../../data/processed/gtfs/gtfs_20260727/trips.parquet")
-    return agencias, routes, shapes, stop_times, stops, trips
+def _(Path):
+    root_dir = Path(__file__).resolve().parents[2] if "__file__" in globals() else Path.cwd()
+    if not (root_dir / "data").exists() and (Path.cwd() / "data").exists():
+        root_dir = Path.cwd()
+    base_gtfs = root_dir / "data" / "processed" / "gtfs" / "gtfs_20260727"
+
+    return (base_gtfs,)
+
+
+@app.cell
+def _(base_gtfs, pl):
+    agencias = pl.read_parquet(base_gtfs / "agency.parquet")
+    calendar = pl.read_parquet(base_gtfs / "calendar.parquet")
+    frequencies = pl.read_parquet(base_gtfs / "frequencies.parquet")
+    routes = pl.read_parquet(base_gtfs / "routes.parquet")
+    shapes = pl.read_parquet(base_gtfs / "shapes.parquet")
+    stop_times = pl.read_parquet(base_gtfs / "stop_times.parquet")
+    stops = pl.read_parquet(base_gtfs / "stops.parquet")
+    trips = pl.read_parquet(base_gtfs / "trips.parquet")
+    return (
+        agencias,
+        calendar,
+        frequencies,
+        routes,
+        shapes,
+        stop_times,
+        stops,
+        trips,
+    )
+
+
+@app.cell
+def _(
+    agencias,
+    base_gtfs,
+    calendar,
+    frequencies,
+    routes,
+    shapes,
+    stop_times,
+    stops,
+    trips,
+):
+    agencias, base_gtfs, calendar, frequencies, routes, shapes, stop_times, stops, trips
+    return
 
 
 @app.cell(hide_code=True)
@@ -103,8 +142,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_agencias_preview):
-    df_agencias_preview.write_parquet ("../../data/processed/gtfs/gtfs_20260727/agency_clean.parquet")
+def _(base_gtfs, df_agencias_preview):
+    df_agencias_preview.write_parquet (base_gtfs / "agency_clean.parquet")
     return
 
 
@@ -166,8 +205,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_routes_clean):
-    df_routes_clean.write_parquet("../../data/processed/gtfs/gtfs_20260727/routes_clean.parquet")
+def _(base_gtfs, df_routes_clean):
+    df_routes_clean.write_parquet(base_gtfs / "routes_clean.parquet")
     return
 
 
@@ -256,8 +295,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_stops_clean):
-    df_stops_clean.write_parquet("../../data/processed/gtfs/gtfs_20260727/stops_clean.parquet")
+def _(base_gtfs, df_stops_clean):
+    df_stops_clean.write_parquet(base_gtfs / "stops_clean.parquet")
     return
 
 
@@ -270,12 +309,28 @@ def _(mo):
 
 
 @app.cell
-def _(routes_clean_lazy, trips):
+def _(calendar, pl):
+    calendar_clean_lazy = (
+        calendar.lazy()
+        .filter(
+            (pl.col("monday") == 1)
+            & (pl.col("tuesday") == 1)
+            & (pl.col("wednesday") == 1)
+            & (pl.col("thursday") == 1)
+            & (pl.col("friday") == 1)
+        )
+    )
+    return (calendar_clean_lazy,)
+
+
+@app.cell
+def _(calendar_clean_lazy, routes_clean_lazy, trips):
     trips_clean_lazy = (
         trips.lazy()
-        .drop_nulls(subset=["trip_id", "route_id"])
+        .drop_nulls(subset=["trip_id", "route_id", "service_id"])
         .unique(subset=["trip_id"])
         .join(routes_clean_lazy, on="route_id", how="semi")
+        .join(calendar_clean_lazy, on="service_id", how="semi")
         .drop(["trip_headsign"])
     )
     return (trips_clean_lazy,)
@@ -320,8 +375,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_trips_clean):
-    df_trips_clean.write_parquet("../../data/processed/gtfs/gtfs_20260727/trips_clean.parquet")
+def _(base_gtfs, df_trips_clean):
+    df_trips_clean.write_parquet(base_gtfs / "trips_clean.parquet")
     return
 
 
@@ -391,8 +446,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_stop_times_clean):
-    df_stop_times_clean.write_parquet("../../data/processed/gtfs/gtfs_20260727/stop_times_clean.parquet")
+def _(base_gtfs, df_stop_times_clean):
+    df_stop_times_clean.write_parquet(base_gtfs / "stop_times_clean.parquet")
     return
 
 
@@ -459,8 +514,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_shapes_clean):
-    df_shapes_clean.write_parquet("../../data/processed/gtfs/gtfs_20260727/shapes_clean.parquet")
+def _(base_gtfs, df_shapes_clean):
+    df_shapes_clean.write_parquet(base_gtfs / "shapes_clean.parquet")
     return
 
 
