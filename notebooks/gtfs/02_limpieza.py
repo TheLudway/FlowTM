@@ -36,7 +36,6 @@ def _(Path):
     if not (root_dir / "data").exists() and (Path.cwd() / "data").exists():
         root_dir = Path.cwd()
     base_gtfs = root_dir / "data" / "processed" / "gtfs" / "gtfs_20260727"
-
     return (base_gtfs,)
 
 
@@ -50,9 +49,12 @@ def _(base_gtfs, pl):
     stop_times = pl.read_parquet(base_gtfs / "stop_times.parquet")
     stops = pl.read_parquet(base_gtfs / "stops.parquet")
     trips = pl.read_parquet(base_gtfs / "trips.parquet")
+    calendar = pl.read_parquet(base_gtfs / "calendar.parquet")
+    calendar_dates = pl.read_parquet(base_gtfs / "calendar_dates.parquet")
     return (
         agencias,
         calendar,
+        calendar_dates,
         frequencies,
         routes,
         shapes,
@@ -67,6 +69,7 @@ def _(
     agencias,
     base_gtfs,
     calendar,
+    calendar_dates,
     frequencies,
     routes,
     shapes,
@@ -74,7 +77,7 @@ def _(
     stops,
     trips,
 ):
-    agencias, base_gtfs, calendar, frequencies, routes, shapes, stop_times, stops, trips
+    agencias, base_gtfs, calendar, frequencies, routes, shapes, stop_times, stops, trips, calendar, calendar_dates
     return
 
 
@@ -303,7 +306,7 @@ def _(base_gtfs, df_stops_clean):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Limpieza trips
+    ## Limpieza calendar
     """)
     return
 
@@ -313,14 +316,127 @@ def _(calendar, pl):
     calendar_clean_lazy = (
         calendar.lazy()
         .filter(
-            (pl.col("monday") == 1)
-            & (pl.col("tuesday") == 1)
-            & (pl.col("wednesday") == 1)
-            & (pl.col("thursday") == 1)
-            & (pl.col("friday") == 1)
+            (pl.col("monday") == 1) &
+            (pl.col("tuesday") == 1) &
+            (pl.col("wednesday") == 1) &
+            (pl.col("thursday") == 1) &
+            (pl.col("friday") == 1)
         )
     )
     return (calendar_clean_lazy,)
+
+
+@app.cell
+def _(calendar_clean_lazy):
+    df_calendar_clean = calendar_clean_lazy.collect()
+    return (df_calendar_clean,)
+
+
+@app.cell
+def _(calendar, df_calendar_clean):
+    total_cal_original = calendar.height
+    total_cal_limpios = df_calendar_clean.height
+    total_cal_eliminados = total_cal_original - total_cal_limpios
+    return total_cal_eliminados, total_cal_limpios, total_cal_original
+
+
+@app.cell
+def _(total_cal_eliminados, total_cal_limpios, total_cal_original):
+    print("\n--- LIMPIEZA CALENDAR (DÍAS HÁBILES) ---")
+    print(f"Calendarios originales:  {total_cal_original:,}")
+    print(f"Calendarios conservados: {total_cal_limpios:,}")
+    print(f"Calendarios eliminados:  {total_cal_eliminados:,}")
+    print("----------------------------------------------------\n")
+    return
+
+
+@app.cell
+def _(df_calendar_clean):
+    df_calendar_clean
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Creacion .parquet
+    """)
+    return
+
+
+@app.cell
+def _(base_gtfs, df_calendar_clean):
+    df_calendar_clean.write_parquet(base_gtfs / "calendar_clean.parquet")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Limpieza calendar_dates
+    """)
+    return
+
+
+@app.cell
+def _(calendar_clean_lazy, calendar_dates):
+    calendar_dates_clean_lazy = (
+        calendar_dates.lazy()
+        .join(calendar_clean_lazy, on="service_id", how="semi")
+    )
+    return (calendar_dates_clean_lazy,)
+
+
+@app.cell
+def _(calendar_dates_clean_lazy):
+    df_calendar_dates_clean = calendar_dates_clean_lazy.collect()
+    return (df_calendar_dates_clean,)
+
+
+@app.cell
+def _(calendar_dates, df_calendar_dates_clean):
+    total_cd_original = calendar_dates.height
+    total_cd_limpios = df_calendar_dates_clean.height
+    total_cd_eliminados = total_cd_original - total_cd_limpios
+    return total_cd_eliminados, total_cd_limpios, total_cd_original
+
+
+@app.cell
+def _(total_cd_eliminados, total_cd_limpios, total_cd_original):
+    print("\n--- LIMPIEZA CALENDAR DATES ---")
+    print(f" originales:  {total_cd_original:,}")
+    print(f" conservadas: {total_cd_limpios:,}")
+    print(f" eliminadas:  {total_cd_eliminados:,}")
+    print("---------------------------------------------------------\n")
+    return
+
+
+@app.cell
+def _(df_calendar_dates_clean):
+    df_calendar_dates_clean
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### cracion archivo .parquet
+    """)
+    return
+
+
+@app.cell
+def _(base_gtfs, df_calendar_dates_clean):
+    df_calendar_dates_clean.write_parquet(base_gtfs / "calendar_dates_clean.parquet")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Limpieza trips
+    """)
+    return
 
 
 @app.cell
