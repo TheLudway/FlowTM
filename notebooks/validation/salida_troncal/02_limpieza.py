@@ -5,7 +5,7 @@ import polars as pl
 # --- ETL Processing (Phase 5) - Salida troncal ---
 
 def normalize_stations(column_name: str) -> list[pl.Expr]:
-    """Aplica expresiones vectorizadas de Polars para extraer llaves y normalizar estaciones."""
+    """Applies Polars vectorized expressions to extract keys and normalize stations."""
     return [
         # 1. Extract exact 5-digit station code O(1)
         pl.col(column_name)
