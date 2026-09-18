@@ -43,39 +43,39 @@ def _(mo):
 
 @app.cell
 def _(Path, mo, pl):
-    ruta_val = Path("data/processed/validaciones_salidas/validacion_troncal")
-    arch_val = next(ruta_val.rglob("*.parquet"), None)
+    validations_path = Path("data/processed/validaciones_salidas/validacion_troncal")
+    validation_file = next(validations_path.rglob("*.parquet"), None)
 
-    if arch_val:
-        df_v = pl.read_parquet(arch_val)
-        res_audit = [
+    if validation_file:
+        validations_df = pl.read_parquet(validation_file)
+        audit_results = [
             {
                 "#": i,
                 "COLUMNA": col,
-                "TIPO": str(df_v[col].dtype),
+                "TIPO": str(validations_df[col].dtype),
                 "% NULOS": round(
-                    (df_v[col].is_null().sum() / len(df_v)) * 100, 2
+                    (validations_df[col].is_null().sum() / len(validations_df)) * 100, 2
                 ),
                 "VALOR EJEMPLO": (
-                    str(df_v[col][0])[:25] if len(df_v) > 0 else "N/A"
+                    str(validations_df[col][0])[:25] if len(validations_df) > 0 else "N/A"
                 ),
             }
-            for i, col in enumerate(df_v.columns, 1)
+            for i, col in enumerate(validations_df.columns, 1)
         ]
-        tabla_fase1 = pl.DataFrame(res_audit)
+        phase1_table = pl.DataFrame(audit_results)
     else:
-        df_v = None
-        tabla_fase1 = pl.DataFrame()
+        validations_df = None
+        phase1_table = pl.DataFrame()
 
     mo.md(
-        f"### Resultados de Auditoría ({arch_val.name if arch_val else 'No hallado'})"
+        f"### Resultados de Auditoría ({validation_file.name if validation_file else 'No hallado'})"
     )
-    return df_v, tabla_fase1
+    return validations_df, phase1_table
 
 
 @app.cell
-def _(mo, tabla_fase1):
-    mo.ui.table(tabla_fase1)
+def _(mo, phase1_table):
+    mo.ui.table(phase1_table)
     return
 
 
@@ -89,57 +89,57 @@ def _(mo):
 
 
 @app.cell
-def _(df_v, mo, pl):
-    if "df_v" in globals() and df_v is not None:
-        cols = df_v.columns
+def _(mo, pl, validations_df):
+    if "validations_df" in globals() and validations_df is not None:
+        columns = validations_df.columns
 
-        col_est = "Estacion_Parada" if "Estacion_Parada" in cols else next((c for c in cols if "estacion" in c.lower()), None)
-        m_estaciones = (
-            df_v.select(col_est).unique().head(8)
-            if col_est
+        station_col = "Estacion_Parada" if "Estacion_Parada" in columns else next((c for c in columns if "estacion" in c.lower()), None)
+        stations_sample = (
+            validations_df.select(station_col).unique().head(8)
+            if station_col
             else pl.DataFrame({"Info": ["No se halló columna de estación"]})
         )
 
-        m_picos = (
-            df_v["Hora_Pico_SN"].value_counts()
-            if "Hora_Pico_SN" in cols
+        peak_hours_dist = (
+            validations_df["Hora_Pico_SN"].value_counts()
+            if "Hora_Pico_SN" in columns
             else pl.DataFrame({"Info": ["Sin Hora_Pico_SN"]})
         )
 
-        m_dias = (
-            df_v["Day_Group_Type"].value_counts()
-            if "Day_Group_Type" in cols
+        day_types_dist = (
+            validations_df["Day_Group_Type"].value_counts()
+            if "Day_Group_Type" in columns
             else pl.DataFrame({"Info": ["Sin Day_Group_Type"]})
         )
 
-        m_perfiles = (
-            df_v["Nombre_Perfil"].value_counts().head(6)
-            if "Nombre_Perfil" in cols
+        user_profiles_dist = (
+            validations_df["Nombre_Perfil"].value_counts().head(6)
+            if "Nombre_Perfil" in columns
             else pl.DataFrame({"Info": ["Sin Nombre_Perfil"]})
         )
     else:
-        m_estaciones = m_picos = m_dias = m_perfiles = pl.DataFrame({"Error": ["df_v no disponible"]})
+        stations_sample = peak_hours_dist = day_types_dist = user_profiles_dist = pl.DataFrame({"Error": ["df_v no disponible"]})
 
     # Layout
-    vista_fase2 = mo.vstack([
+    phase2_view = mo.vstack([
         mo.md("## Fase 2: Exploración de Patrones Categóricos en Validaciones"),
         mo.md("#### 1. Patrón en Nombres de Estaciones (Muestra)"),
-        mo.ui.table(m_estaciones),
+        mo.ui.table(stations_sample),
         mo.md("#### 2. Distribución de Hora Pico (Hora_Pico_SN)"),
-        mo.ui.table(m_picos),
+        mo.ui.table(peak_hours_dist),
         mo.md("#### 3. Tipos de Día (Day_Group_Type)"),
-        mo.ui.table(m_dias),
+        mo.ui.table(day_types_dist),
         mo.md("#### 4. Perfiles de Usuario Masivos (Nombre_Perfil)"),
-        mo.ui.table(m_perfiles)
+        mo.ui.table(user_profiles_dist)
     ])
 
-    vista_fase2
+    phase2_view
     return
 
 
 @app.cell
 def _(mo):
-    vista_fase3 = mo.vstack([
+    phase3_view = mo.vstack([
         mo.md(
             r"""
             ## Fase 3: Hallazgos Clave y Decisiones de Arquitectura
@@ -161,15 +161,14 @@ def _(mo):
 
             ---
 
-            ### 3. Estandarización de Texto Canónico
+            ### 3. Estandarización de Texto Canónico
             - *Descubrimiento:* Se identifican caracteres especiales, acentos y variaciones ortográficas en los nombres textuales.
             - *Decisión de Arquitectura:* Se aplicará una limpieza léxica vectorizada (remoción de acentos, conversión a mayúsculas y eliminación del prefijo numérico) para generar NOMBRE_ESTACION_CANONICO, garantizando consistencia en los reportes y visualizaciones.
             """
         )
     ])
 
-    # Renderizado final
-    vista_fase3
+    phase3_view
     return
 
 
@@ -182,17 +181,17 @@ def _(mo):
 
 
 @app.cell
-def _(df_v, mo, pl):
-    def normalizar_estaciones(columna: str) -> list[pl.Expr]:
+def _(mo, pl, validations_df):
+    def normalize_stations(column_name: str) -> list[pl.Expr]:
         return [
-            pl.col(columna)
+            pl.col(column_name)
             .str.extract(r"\((\d{5})\)", 1)
             .alias("CODIGO_ESTACION"),
-            pl.col(columna)
+            pl.col(column_name)
             .str.extract(r"\((\d{2})\)\d{3}", 1)
             .alias("CODIGO_TRONCAL"),
             (
-                pl.col(columna)
+                pl.col(column_name)
                 .str.replace(r"^\(\d+\)\s*", "")
                 .str.to_uppercase()
                 .str.replace(r"[ÁÀÄÂ]", "A")
@@ -206,38 +205,36 @@ def _(df_v, mo, pl):
             ),
         ]
 
-
-    if "df_v" in globals() and df_v is not None:
-        cols_f4 = df_v.columns
-        col_est_f4 = (
+    if "validations_df" in globals() and validations_df is not None:
+        phase4_columns = validations_df.columns
+        phase4_station_col = (
             "Estacion_Parada"
-            if "Estacion_Parada" in cols_f4
-            else next((c for c in cols_f4 if "estacion" in c.lower()), cols_f4[0])
+            if "Estacion_Parada" in phase4_columns
+            else next((c for c in phase4_columns if "estacion" in c.lower()), phase4_columns[0])
         )
 
-        muestra_norm = (
-            df_v.select([col_est_f4, *normalizar_estaciones(col_est_f4)])
+        normalized_sample = (
+            validations_df.select([phase4_station_col, *normalize_stations(phase4_station_col)])
             .unique(subset=["CODIGO_ESTACION"])
             .head(10)
         )
 
     else:
-        muestra_norm = pl.DataFrame(
+        normalized_sample = pl.DataFrame(
             {"Error": ["df_v no está disponible para probar la normalización"]}
         )
 
-    vista_fase4 = mo.vstack([
+    phase4_view = mo.vstack([
         mo.md(
             "## Fase 4: Función Universal de Normalización de Estaciones"
         ),
         mo.md(
             "A continuación se presenta el resultado de aplicar la transformación vectorizada en Polars sobre las estaciones encontradas en las validaciones:"
         ),
-        mo.ui.table(muestra_norm),
+        mo.ui.table(normalized_sample),
     ])
 
-
-    vista_fase4
+    phase4_view
     return
 
 

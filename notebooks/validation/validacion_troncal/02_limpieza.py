@@ -4,20 +4,20 @@ import polars as pl
 
 # --- ETL Processing (Phase 5) - Validacion troncal ---
 
-def normalizar_estaciones(columna: str) -> list[pl.Expr]:
+def normalize_stations(column_name: str) -> list[pl.Expr]:
     """Apply vectorized Polars expressions to extract keys and normalize station names."""
     return [
         # 1. Extract exact 5-digit station code O(1)
-        pl.col(columna)
+        pl.col(column_name)
         .str.extract(r"\((\d{5})\)", 1)
         .alias("CODIGO_ESTACION"),
         # 2. Extract 2-digit trunk code
-        pl.col(columna)
+        pl.col(column_name)
         .str.extract(r"\((\d{2})\d{3}\)", 1)
         .alias("CODIGO_TRONCAL"),
         # 3. Clean canonical station name
         (
-            pl.col(columna)
+            pl.col(column_name)
             .str.replace(r"^\(\d+\)\s*", "")
             .str.to_uppercase()
             .str.replace(r"[ÁÀÄÂ]", "A")
@@ -32,28 +32,28 @@ def normalizar_estaciones(columna: str) -> list[pl.Expr]:
     ]
 
 
-def ejecutar_etl_validaciones():
+def run_validations_etl():
     """Execute the Phase 5 ETL batch pipeline for validation Parquet files."""
     project_root = Path(__file__).resolve().parents[3]
-    ruta_val = (
+    validations_path = (
         project_root / "data/processed/validaciones_salidas/validacion_troncal"
     )
 
     # Phase 1: Discover original Parquet files (excluding previous _clean files)
     try:
-        archivos_val = [
-            p
-            for p in sorted(ruta_val.rglob("*.parquet"))
-            if not p.stem.endswith("_clean")
+        validation_files = [
+            file_path
+            for file_path in sorted(validations_path.rglob("*.parquet"))
+            if not file_path.stem.endswith("_clean")
         ]
         print(
-            f"[INFO] Discovered {len(archivos_val)} original parquet files in {ruta_val}"
+            f"[INFO] Se encontraron {len(validation_files)} archivos parquet originales en: {validations_path}"
         )
     except Exception as e:
-        print(f"[ERROR] Failed to scan directory {ruta_val}: {e}")
+        print(f"[ERROR] Falló el escaneo del directorio {validations_path}: {e}")
         return
 
-    cols_utiles_val = [
+    target_columns = [
         "Fecha_Transaccion",
         "Hora_Pico_SN",
         "Day_Group_Type",
@@ -62,58 +62,58 @@ def ejecutar_etl_validaciones():
         "Acceso_Estacion",
     ]
 
-    for p in archivos_val:
+    for file_path in validation_files:
         try:
-            print(f"[PROCESSING] Starting processing for file: {p.name}")
+            print(f"[PROCESANDO] Iniciando procesamiento para el archivo: {file_path.name}")
 
             # Lazy evaluation reading
-            lf = pl.scan_parquet(p)
-            cols_existentes = lf.collect_schema().names()
+            lazy_df = pl.scan_parquet(file_path)
+            existing_columns = lazy_df.collect_schema().names()
 
             # Identify station column dynamically
-            col_est = (
+            station_col = (
                 "Estacion_Parada"
-                if "Estacion_Parada" in cols_existentes
+                if "Estacion_Parada" in existing_columns
                 else next(
-                    (c for c in cols_existentes if "estacion" in c.lower()),
+                    (col for col in existing_columns if "estacion" in col.lower()),
                     None,
                 )
             )
 
-            if not col_est:
+            if not station_col:
                 raise ValueError(
-                    f"No station column found in schema for file {p.name}"
+                    f"No se encontró la columna de estación en el esquema de {file_path.name}"
                 )
 
             # Phase 2 & 3: Select target columns based on architectural design
-            cols_a_conservar = [
-                c for c in cols_utiles_val if c in cols_existentes
+            cols_to_keep = [
+                col for col in target_columns if col in existing_columns
             ]
 
             # Phase 4: Apply vectorized normalization expressions
-            lf_clean = lf.select(
-                cols_a_conservar + normalizar_estaciones(col_est)
+            lazy_df_clean = lazy_df.select(
+                cols_to_keep + normalize_stations(station_col)
             )
 
             # Collect lazy computation into eager DataFrame
-            df_clean = lf_clean.collect()
+            df_clean = lazy_df_clean.collect()
 
             # Target output path definition with _clean suffix
-            ruta_salida = p.with_name(f"{p.stem}_clean.parquet")
+            output_path = file_path.with_name(f"{file_path.stem}_clean.parquet")
 
             # Phase 5: Export processed clean data with ZSTD compression
-            df_clean.write_parquet(ruta_salida, compression="zstd")
+            df_clean.write_parquet(output_path, compression="zstd")
 
             print(
-                f"[SUCCESS] Cleaned validation data saved to: {ruta_salida.name} | Rows: {len(df_clean)}"
+                f"[ÉXITO] Datos de validaciones limpios guardados en: {output_path.name} | Filas: {len(df_clean)}"
             )
 
         except Exception as e:
-            print(f"[ERROR] Failed to process file {p.name}: {e}")
+            print(f"[ERROR] Falló el procesamiento del archivo {file_path.name}: {e}")
 
-    print("[COMPLETED] Validation data ETL pipeline execution finished.")
+    print("[COMPLETADO] Finalizó la ejecución del pipeline ETL de validaciones.")
 
 
 if __name__ == "__main__":
 
-    ejecutar_etl_validaciones()
+    run_validations_etl()
