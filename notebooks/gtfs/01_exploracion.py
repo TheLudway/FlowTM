@@ -27,14 +27,18 @@ def _(pl):
 
 @app.cell(hide_code=True)
 def _(pl):
-    calendar_dates = pl.read_parquet("data/processed/gtfs/gtfs_20260727/calendar_dates.parquet")
+    calendar_dates = pl.read_parquet(
+        "data/processed/gtfs/gtfs_20260727/calendar_dates.parquet"
+    )
     calendar_dates
     return
 
 
 @app.cell(hide_code=True)
 def _(pl):
-    fare_attributes = pl.read_parquet("data/processed/gtfs/gtfs_20260727/fare_attributes.parquet")
+    fare_attributes = pl.read_parquet(
+        "data/processed/gtfs/gtfs_20260727/fare_attributes.parquet"
+    )
     fare_attributes
     return
 
@@ -48,7 +52,9 @@ def _(pl):
 
 @app.cell(hide_code=True)
 def _(pl):
-    frequencies = pl.read_parquet("data/processed/gtfs/gtfs_20260727/frequencies.parquet")
+    frequencies = pl.read_parquet(
+        "data/processed/gtfs/gtfs_20260727/frequencies.parquet"
+    )
     frequencies
     return
 
