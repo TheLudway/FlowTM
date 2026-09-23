@@ -105,7 +105,7 @@ def _(mo):
 
 @app.cell
 def _(agency_dataframe, pl):
-    # Isolate the main transit agency (agency_id = 1) and drop redundant metadata.
+    # Isolate the main agency (agency_id = 1) and drop metadata.
     clean_agency_lazy = (
         agency_dataframe.lazy()
         .filter(pl.col("agency_id") == 1)
@@ -177,6 +177,7 @@ def _(mo):
 
 @app.cell
 def _(clean_agency_lazy, routes_dataframe):
+    # Keep only routes belonging to the valid agency (Transmilenio troncal).
     clean_routes_lazy = (
         routes_dataframe.lazy()
         .drop_nulls(subset=["route_id", "agency_id"])
@@ -246,6 +247,7 @@ def _(
     stops_dataframe,
     trips_dataframe,
 ):
+    # Filter stop times using valid routes to identify actively used stops.
     filtered_trips_lazy = (
         trips_dataframe.lazy()
         .drop_nulls(subset=["trip_id", "route_id"])
@@ -265,6 +267,7 @@ def _(
         .join(filtered_stop_times_lazy, on="stop_id", how="semi")
     )
 
+    # Retain parent stations that group the active stops.
     parent_station_ids_lazy = (
         active_stops_lazy.select("parent_station").drop_nulls().unique()
     )
@@ -281,6 +284,7 @@ def _(
         )
     )
 
+    # Combine active stops and parents, removing duplicates and unused zones.
     clean_stops_lazy = (
         pl.concat([active_stops_lazy, parent_stops_lazy])
         .unique(subset=["stop_id"])
@@ -343,6 +347,7 @@ def _(mo):
 
 @app.cell
 def _(calendar_dataframe, pl):
+    # Available only on weekdays (Monday to Friday).
     clean_calendar_lazy = calendar_dataframe.lazy().filter(
         (pl.col("monday") == 1)
         & (pl.col("tuesday") == 1)
@@ -411,6 +416,7 @@ def _(mo):
 
 @app.cell
 def _(calendar_dates_dataframe, clean_calendar_lazy):
+    # Remove orphaned date exceptions linked to discarded weekend schedules.
     clean_calendar_dates_lazy = calendar_dates_dataframe.lazy().join(
         clean_calendar_lazy, on="service_id", how="semi"
     )
@@ -483,6 +489,7 @@ def _(mo):
 
 @app.cell
 def _(clean_calendar_lazy, clean_routes_lazy, trips_dataframe):
+    # Cascade filter: isolate trips linked to active weekday schedules and valid routes.
     clean_trips_lazy = (
         trips_dataframe.lazy()
         .drop_nulls(subset=["trip_id", "route_id", "service_id"])
@@ -548,6 +555,7 @@ def _(mo):
 
 @app.cell
 def _(clean_stops_lazy, clean_trips_lazy, stop_times_dataframe):
+    # Remove orphaned scheduling data to guarantee that the simulation engine only processes valid weekday events.
     clean_stop_times_lazy = (
         stop_times_dataframe.lazy()
         .join(clean_trips_lazy.select("trip_id"), on="trip_id", how="semi")
@@ -625,6 +633,7 @@ def _(clean_trips_lazy):
 
 @app.cell
 def _(shapes_dataframe, valid_shapes_lazy):
+    # Identify the unique paths required by the active weekday trips.
     clean_shapes_lazy = (
         shapes_dataframe.lazy()
         .drop_nulls(subset=["shape_id"])
