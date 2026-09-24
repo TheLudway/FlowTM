@@ -21,6 +21,7 @@ if str(ROOT_DIR / "src") not in sys.path:
 from flowtm.domain.state import ScheduleState
 from flowtm.simulation.engine import SimuladorCorredor
 from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
+from flowtm.infrastructure.repositories.data_repository import ParquetDataRepository
 
 escenario_dir = ROOT_DIR / "data/scenarios/piloto"
 
@@ -131,20 +132,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------
-# DATA LOADING (CACHED)
+# DATA LOADING (REPOSITORY PATTERN)
 # -----------------
-@st.cache_data
-def load_telemetry(scenario_path, name):
-    path = scenario_path / name
-    if not path.exists():
-        return None, None
-    buses_df = pl.read_parquet(path / "telemetria_buses.parquet").to_pandas()
-    colas_df = pl.read_parquet(path / "historial_colas.parquet").to_pandas()
-    return buses_df, colas_df
-
-@st.cache_data
-def load_topology(scenario_path):
-    return pl.read_parquet(scenario_path / "estaciones_piloto.parquet").to_pandas()
+@st.cache_resource
+def get_repository(scenario_path):
+    return ParquetDataRepository(scenario_path)
 
 # -----------------
 # SIDEBAR CONTROLS
@@ -208,19 +200,21 @@ if btn_optimizar:
         st.rerun()
 
 # -----------------
-# DASHBOARD STATE PREP
+# DASHBOARD STATE PREP (VIA REPOSITORY)
 # -----------------
 res_base = st.session_state["resultado_base"]
 h_ini = st.session_state["hora_ini"]
 h_fin = st.session_state["hora_fin"]
 ia_activa = st.session_state.get("ia_ejecutada", False)
 
-df_topo = load_topology(escenario_dir)
+repo = get_repository(escenario_dir)
+df_topo = repo.get_topology()
+
 if ia_activa:
-    buses_df, colas_df = load_telemetry(escenario_dir, "telemetria_opt")
+    buses_df, colas_df = repo.get_telemetry("opt")
     mode_label = "🟢 Escenario Optimizado (FlowTM IA)"
 else:
-    buses_df, colas_df = load_telemetry(escenario_dir, "telemetria_base")
+    buses_df, colas_df = repo.get_telemetry("base")
     mode_label = "🔴 Escenario Oficial (GTFS Actual)"
 
 if buses_df is not None and colas_df is not None and len(buses_df) > 0:

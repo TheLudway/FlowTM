@@ -65,4 +65,56 @@ $$\text{Criterio Metrópolis: } P(\text{aceptar}) = \exp\left(\frac{\Delta U}{T_
 * **Uso en el motor:** Es el "cerebro" del Agente Racional. Modifica heurísticamente los horarios de despacho y castiga severamente el hacinamiento extremo, escapando de mínimos locales para reducir drásticamente los tiempos de espera con la misma capacidad instalada.
 
 ---
+
+## 🏛️ Arquitectura de Software y Patrones de Diseño
+
+Implementamos una Arquitectura Híbrida de Datos apoyada en los principios de Clean Architecture. 
+
+### 1. Desacoplamiento Estricto
+La lógica de negocio y las ecuaciones físicas (`domain` y `simulation`) son completamente agnósticas de la interfaz gráfica (`presentation`). Si en el futuro se reemplaza Streamlit por una aplicación web en React o Vue, el motor del simulador (SimPy) correrá exactamente igual. Toda la carga de datos se realiza a través del **Repository Pattern** In-Memory, consumiendo archivos `.parquet` comprimidos con Zstandard (ZSTD) y operados nativamente por `polars`.
+
+### 2. Árbol de Directorios (Módulos Principales)
+```text
+src/flowtm/
+├── domain/                          # Entidades puras de negocio
+│   ├── models.py                    # Dataclasses: Pasajero, Bus, Estacion
+│   └── state.py                     # ScheduleState (Vector de frecuencias)
+├── simulation/                      # Física y eventos discretos (SimPy)
+│   ├── engine.py                    # SimuladorCorredor (Procesos)
+│   ├── collector.py                 # Colector de telemetría (Observer)
+│   └── dwell_time.py                # Modelo empírico de tiempo de parada
+├── optimization/                    # Inteligencia Artificial
+│   ├── simulated_annealing.py       # Optimizador con enfriamiento geométrico
+│   └── utility.py                   # Función de utilidad multiobjetivo U(S)
+├── infrastructure/                  # Persistencia y acceso a datos
+│   └── repositories/                
+│       └── data_repository.py       # Patrón Repositorio (ParquetDataRepository)
+└── presentation/                    # Interfaz de usuario
+    └── dashboard/
+        └── app.py                   # Centro de Control de Operaciones (OCC)
+```
+
+### 3. Patrones de Diseño Implementados
+
+* **Observer Pattern (Patrón Observador):**
+  * *Dónde:* `MetricsCollector` en `src/flowtm/simulation/collector.py`.
+  * *Cómo funciona:* El motor de SimPy ejecuta la física de buses y pasajeros de forma pura. Cada vez que un bus arriba, sube gente o cambia de coordenada, emite un evento al Collector, que registra la telemetría en series temporales sin interferir ni hacer más lenta la física.
+
+* **Repository Pattern (Patrón Repositorio):**
+  * *Dónde:* `DataRepository` en `infrastructure/repositories/`.
+  * *Cómo funciona:* El Dashboard y el Simulador nunca abren rutas de disco directamente ni hacen queries crudas. Invocan a la interfaz del repositorio, abstrayendo si la telemetría viene de Pandas, Polars, o un servicio en la nube.
+
+* **State Pattern & Inmutabilidad:**
+  * *Dónde:* `ScheduleState` en `src/flowtm/domain/state.py`.
+  * *Cómo funciona:* El vector de frecuencias se encapsula en un objeto inmutable. El optimizador genera transiciones de estado ($S \to S'$) mediante copias clonadas con perturbación estocástica, permitiendo descartar ramificaciones fallidas sin alterar la memoria del proceso.
+
+* **Strategy Pattern:**
+  * *Dónde:* En la política de evaluación `SimuladorCorredor.simular()`.
+  * *Cómo funciona:* El motor de eventos discretos recibe un diccionario genérico de frecuencias. Ejecuta ciegamente la estrategia oficial (GTFS actual) o la estrategia perturbada (IA) sin tener que modificar una sola línea del motor físico de los buses.
+
+* **Resource Pooling (Gestión Concurrente):**
+  * *Dónde:* `simpy.Resource(capacity=2)` en la definición de Estaciones.
+  * *Cómo funciona:* Modela las bahías físicas de parada como semáforos de exclusión mutua limitados. Garantiza que si dos buses están abordando en plataforma, un tercer bus tendrá que formar cola en el carril exclusivo (Bus Bunching real).
+
+---
 *Desarrollado y optimizado como componente núcleo de FlowTM.*
