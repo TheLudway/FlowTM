@@ -14,8 +14,13 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "marimo>=0.17.6",
+    "plotly>=7.0.0",
     "polars>=1.36.1",
+    "pydeck>=0.9.3",
+    "pytest>=9.1.1",
     "ruff>=0.16.4",
+    "simpy>=4.1.2",
+    "streamlit>=1.63.0",
 ]
 
 [project.scripts]
