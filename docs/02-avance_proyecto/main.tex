@@ -23,10 +23,12 @@
 \usepackage{subcaption}
 \usepackage{caption}
 \usepackage{multirow}
-\usepackage{array}
 \usepackage{listings}
 \usepackage{cancel}
 \usepackage{fancyhdr}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{ragged2e}
 
 \addbibresource{referencias.bib}
 
@@ -186,7 +188,6 @@
 \newpage
 
 \tableofcontents
-\listoffigures
 \listoftables
 \thispagestyle{empty}
 \newpage
@@ -198,7 +199,7 @@ El sistema de transporte masivo TransMilenio en Bogotá enfrenta severos problem
 
 La causa principal de esta situación radica en la rigidez de la programación de despachos, la cual genera una asimetría de ocupación: mientras las rutas corrientes experimentan saturación severa dejando pasajeros varados en plataforma, los servicios expresos que transitan de forma paralela operan con capacidad ociosa~\cite{mobilitydata2026gtfs,transmilenio2026datos}.
 
-La adquisición de nuevos vehículos no es viable a corto plazo debido a su elevado costo de capital (aproximadamente $1.5 millones USD por bus) y a la saturación de la capacidad física en los patios operativos~\cite{russell2020artificial}. Por lo tanto, la alternativa viable consiste en formular un Agente Inteligente capaz de optimizar y redistribuir los intervalos de despacho sobre la flota existente, haciendo coincidir la oferta de transporte con los requerimientos reales de la demanda~\cite{russell2020artificial}.
+La adquisición de nuevos vehículos no es viable a corto plazo debido a su elevado costo de capital (aproximadamente \$1.5 millones USD por bus) y a la saturación de la capacidad física en los patios operativos~\cite{russell2020artificial}. Por lo tanto, la alternativa viable consiste en formular un Agente Inteligente capaz de optimizar y redistribuir los intervalos de despacho sobre la flota existente, haciendo coincidir la oferta de transporte con los requerimientos reales de la demanda~\cite{russell2020artificial}.
 
 \section{Definición Del Agente Inteligente}
 
@@ -206,21 +207,145 @@ Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (
 
 \begin{itemize}
   \item \textbf{Entidad Operativa:} No se confunde con la interfaz gráfica ni con el motor de almacenamiento. El agente es el software decisor que evalúa el estado del corredor y determina la asignación algorítmica de frecuencias de paso para las rutas en operación.
-  \item \textbf{Decisión que toma:} El agente decide el Vector de Intervalos de Despacho \(H = \{h_r\}\) para cada ruta \(r ∈ {B13, B18, B23, B27, B74, B75}\) en minutos, restringido por la flota finita disponible:
+  \item \textbf{Decisión que toma:} El agente decide el Vector de Intervalos de Despacho \(H = \{h_r\}\) para cada ruta \(r \in {B13, B18, B23, B27, B74, B75}\) en minutos, restringido por la flota finita disponible:
 
         Decisión: \(H = \{ h_{B13}, h_{B18}, h_{B23}, h_{B27}, h_{B74}, h_{B75}\} \in [2.0, 15.0]^6 \subset \mathbb{R}^6\)
 
-        Sujeto a: \(\sum_r B_{usados}(h_r) \leq B_{max}\). Donde: \(B_{max}\) es una constante, la flota física acotada, en total 106 buses, \(B_{usados}\) se define como:
+        Sujeto a: \(\sum_r B_{\mathrm{usados}}(h_r) \leq B_{\mathrm{max}}\). Donde: \(B_{\mathrm{max}}\) es una constante, la flota física acotada, en total 106 buses, \(B_{usados}\) se define como:
 
         \[
-        B_{usados}(h_r) = \dfrac{t_{sim}}{h_r}
+        B_{\mathrm{usados}}(h_r) = \dfrac{t_{\mathrm{sim}}}{h_r}
         \]
 
-        \(t_{sim}\) es el tiempo en minutos que dura la simulación.
+        \(t_{\mathrm{sim}}\) es el tiempo en minutos que dura la simulación.
 
 \end{itemize}
 
 \section{Modelo PEAS/REAS}
+
+\begin{longtable}{|>{\bfseries}p{0.18\textwidth} |p{0.76\textwidth}|}
+    \caption{Especificación PEAS del agente inteligente FlowTM}
+    \label{tab:peas-flowtm} \\
+
+    \toprule
+    \textbf{Dimensión PEAS} & \textbf{Descripción específica del proyecto FlowTM} \\
+    \midrule
+    \endfirsthead
+
+    \multicolumn{2}{c}%
+    {{\tablename\ \thetable{} -- continuación}} \\
+    \toprule
+    \textbf{Dimensión PEAS} & \textbf{Descripción específica del proyecto FlowTM} \\
+    \midrule
+    \endhead
+
+    \midrule
+    \multicolumn{2}{r}{{Continúa en la siguiente página}} \\
+    \endfoot
+
+    \bottomrule
+    \endlastfoot
+
+    \textbf{Rendimiento (Performance)}
+    &
+    Función de utilidad multicriterio \(U(S)\) que penaliza la ineficiencia
+    del sistema:
+
+    \[
+        U(S) =
+        -\left[
+        w_1 \bar{W}
+        + w_2(\mathrm{Sobrecupo}_{95\%})^{1.5}
+        + w_3 Q_{\mathrm{remanente}}
+        + w_4 B_{\mathrm{usados}}
+        \right]
+    \]
+
+    donde \(\bar{W}\) es el tiempo de espera medio ponderado (min),
+    \(\mathrm{Sobrecupo}_{95\%}\) es la fracción de buses con ocupación
+    \(\geq 95\%\), penalizada exponencialmente con exponente \(1.5\) para
+    castigar el hacinamiento extremo, \(Q_{\mathrm{remanente}}\) son los
+    pasajeros que quedan en plataforma al terminar la franja y
+    \(B_{\mathrm{usados}}\) es la flota consumida. Los pesos son
+    \(w_1=0.40\), \(w_2=0.30\), \(w_3=0.15\) y \(w_4=0.15\).
+    \\ \hline 
+
+    Entorno (Environment)
+    &
+    Corredor troncal Autonorte--(Calle 45 Caracas), en sentido sur a
+    norte, compuesto por 29 estaciones secuenciales, carriles
+    exclusivos de tráfico segregado, 6 servicios troncales
+    (B13, B18, B23, B27, B74, B75), andenes (puertas de embarque) con
+    capacidad de parada acotada (máximo 2 bahías físicas de
+    estacionamiento simultáneas por estación) y una afluencia acumulada
+    de 45\,000 pasajeros en la franja pico.
+    \\ \hline
+
+    Actuadores (Actuators)
+    &
+    Módulo exportador de especificación oficial de tránsito GTFS
+    (\texttt{frequencies.txt}), el cual publica los campos estructurados
+    (\texttt{route\_id}, \texttt{start\_time}, \texttt{end\_time},
+    \texttt{headway\_secs}, \texttt{exact\_times=0}) para ser consumidos
+    por los sistemas de gestión y despacho de flota (SAE).
+    \\ \hline
+
+    Sensores (Sensors)
+    &
+    \begin{enumerate}
+        \item Ingesta de archivos \texttt{.Parquet} de la matriz de
+        validaciones de tarjetas tullave
+        (\(\lambda(s,t)\) agregada en intervalos de 15 min).
+
+        \item Conteos de desocupación en torniquetes externos
+        (\textit{Salidas\_S}) para el cálculo de probabilidades de
+        descenso Origen--Destino.
+
+        \item Topología georreferenciada del GeoJSON oficial
+        (latitudes/longitudes de paradas) y archivos GTFS
+        (\texttt{stops.txt}, \texttt{trips.txt},
+        \texttt{stop\_times.txt}).
+    \end{enumerate}
+    \\
+
+\end{longtable}
+
+\section{Caracterización del Entorno}
+
+\begin{itemize}
+  \item \textbf{Parcialmente Observable:} El agente percibe las validaciones de acceso al andén y las salidas por torniquete, pero desconoce el destino final de cada usuario individual al momento de entrar y no observa la velocidad instantánea de los buses entre estaciones afectadas por semáforos [4].
+
+  \item \textbf{Estocástico:} Las llegadas de pasajeros se rigen por un Proceso de Poisson No Homogéneo (NHPP) y los tiempos de abordaje (Dwell Time) varían aleatoriamente en función de la aglomeración de las puertas.
+
+  \item \textbf{Dinámico:} La demanda y la ocupación de los buses evolucionan continuamente mientras el agente evalúa y calcula alternativas de despacho.
+
+  \item \textbf{Secuencial:} Las frecuencias asignadas a las 06:00 a.m. condicionan directamente el tamaño de las colas y la disponibilidad de flota a las 07:30 a.m.
+
+  \item \textbf{Continuo:} El tiempo físico y el desplazamiento espacial de los buses fluyen continuamente, requiriendo su integración numérica en SimPy.
+
+  \item \textbf{Individual / Centralizado:} Existe un único agente decisor global responsable de optimizar el corredor completo.
+
+\end{itemize}
+
+
+\section{Ciclo Percepción -– Decisión –- Acción}
+
+El proceso continuo del agente se estructura en 5 pasos fundamentales:
+
+\begin{enumerate}
+  \item Paso 1 (Percibir): El agente lee las entradas de usuarios por torniquete en cada estación, las salidas registradas y el número de buses disponibles en patio.
+  \item Paso 2 (Simular): Prueba internamente un esquema de horarios propuesto y proyecta la acumulación de filas en andén, la ocupación de los buses y el tiempo de parada por estación mediante balance de flujos.
+  \item Paso 3 (Evaluar): Calcula la puntuación del esquema simulado comparándolo contra el horario base mediante la función de utilidad U(S).
+  \item Paso 4 (Decidir): Selecciona la configuración de intervalos que ofrece el mejor balance entre menor tiempo de espera y menor sobrecupo, sin sobrepasar el límite de 106 buses.
+  \item Paso 5 (Actuar): Genera y exporta la tabla final de programación en formato GTFS (frequencies.txt) para su ejecución operativa en la flota.
+\end{enumerate}
+
+
+\section{Datos Requeridos y Viabilidad Arquitectónica}
+
+\subsection{Inventario y Acceso Real a Fuentes de Datos}
+
+
 
 
 \addcontentsline{toc}{section}{Referencias}
