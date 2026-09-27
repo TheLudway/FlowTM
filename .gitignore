@@ -15,3 +15,19 @@ wheels/
 *.zip
 *.csv
 *.parquet
+
+# Cosas de LaTeX
+.auctex-auto/
+*.bcf
+*.xml
+*.synctex.gz
+*.aux
+*.bbl
+*.blg
+*.lof
+*.log
+*.lot
+*.run.xml
+*.toc
+*.out
+svg-inkscape/
