@@ -70,8 +70,8 @@
 \setstretch{1.2}
 \geometry{
     textheight=9in,
-    textwidth=5.5in,
-    top=1in,
+    textwidth=7.0in,
+    top=0.5in,
     headheight=12pt,
     headsep=25pt,
     footskip=30pt
@@ -207,17 +207,11 @@ Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (
 
 \begin{itemize}
   \item \textbf{Entidad Operativa:} No se confunde con la interfaz gráfica ni con el motor de almacenamiento. El agente es el software decisor que evalúa el estado del corredor y determina la asignación algorítmica de frecuencias de paso para las rutas en operación.
-  \item \textbf{Decisión que toma:} El agente decide el Vector de Intervalos de Despacho \(H = \{h_r\}\) para cada ruta \(r \in {B13, B18, B23, B27, B74, B75}\) en minutos, restringido por la flota finita disponible:
+  \item \textbf{Decisión que toma:} El agente decide el Vector de Intervalos de Despacho \(H = \{h_r\}\) para cada ruta \(r \in \{B13, B18, B23, B27, B74, B75\}\) en minutos, restringido por la flota finita disponible:
 
         Decisión: \(H = \{ h_{B13}, h_{B18}, h_{B23}, h_{B27}, h_{B74}, h_{B75}\} \in [2.0, 15.0]^6 \subset \mathbb{R}^6\)
 
-        Sujeto a: \(\sum_r B_{\mathrm{usados}}(h_r) \leq B_{\mathrm{max}}\). Donde: \(B_{\mathrm{max}}\) es una constante, la flota física acotada, en total 106 buses, \(B_{usados}\) se define como:
-
-        \[
-        B_{\mathrm{usados}}(h_r) = \dfrac{t_{\mathrm{sim}}}{h_r}
-        \]
-
-        \(t_{\mathrm{sim}}\) es el tiempo en minutos que dura la simulación.
+        Sujeto a: \(\sum_r B_{\mathrm{usados}}(h_r) \leq B_{\mathrm{max}}\). Donde: \(B_{\mathrm{max}}\) es una constante, la flota física acotada, en total 106 buses, \(B_{\mathrm{usados}}\) se define como: \(B_{\mathrm{usados}}(h_r) = \dfrac{t_{\mathrm{sim}}}{h_r}\), \(t_{\mathrm{sim}}\) es el tiempo en minutos que dura la simulación.
 
 \end{itemize}
 
@@ -232,11 +226,6 @@ Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (
     \midrule
     \endfirsthead
 
-    \multicolumn{2}{c}%
-    {{\tablename\ \thetable{} -- continuación}} \\
-    \toprule
-    \textbf{Dimensión PEAS} & \textbf{Descripción específica del proyecto FlowTM} \\
-    \midrule
     \endhead
 
     \midrule
@@ -272,7 +261,7 @@ Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (
 
     Entorno (Environment)
     &
-    Corredor troncal Autonorte--(Calle 45 Caracas), en sentido sur a
+    Corredor desde estación Calle 45 hasta Portal Norte, en sentido sur a
     norte, compuesto por 29 estaciones secuenciales, carriles
     exclusivos de tráfico segregado, 6 servicios troncales
     (B13, B18, B23, B27, B74, B75), andenes (puertas de embarque) con
@@ -292,20 +281,18 @@ Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (
 
     Sensores (Sensors)
     &
-    \begin{enumerate}
-        \item Ingesta de archivos \texttt{.Parquet} de la matriz de
+        Ingesta de archivos \texttt{.parquet} de la matriz de
         validaciones de tarjetas tullave
         (\(\lambda(s,t)\) agregada en intervalos de 15 min).
 
-        \item Conteos de desocupación en torniquetes externos
+        Conteos de desocupación en torniquetes externos
         (\textit{Salidas\_S}) para el cálculo de probabilidades de
         descenso Origen--Destino.
 
-        \item Topología georreferenciada del GeoJSON oficial
+        Topología georreferenciada del GeoJSON oficial
         (latitudes/longitudes de paradas) y archivos GTFS
         (\texttt{stops.txt}, \texttt{trips.txt},
         \texttt{stop\_times.txt}).
-    \end{enumerate}
     \\
 
 \end{longtable}
@@ -345,6 +332,212 @@ El proceso continuo del agente se estructura en 5 pasos fundamentales:
 
 \subsection{Inventario y Acceso Real a Fuentes de Datos}
 
+
+\begin{longtable}{|>{\bfseries}p{0.19\textwidth} |p{0.24\textwidth} |p{0.16\textwidth} |p{0.29\textwidth}|}
+    \caption{Fuentes y características de los conjuntos de datos utilizados por FlowTM}
+    \label{tab:datasets-flowtm} \\
+
+    \toprule
+    \textbf{Conjunto de Datos}
+    & \textbf{Fuente Oficial Concreta}
+    & \textbf{Tipo de Acceso}
+    & \textbf{Estado de Verificación y Volumen} \\
+    \midrule
+    \endfirsthead
+
+    \multicolumn{4}{c}%
+    {{\tablename\ \thetable{} -- continuación}} \\
+    \toprule
+    \textbf{Conjunto de Datos}
+    & \textbf{Fuente Oficial Concreta}
+    & \textbf{Tipo de Acceso}
+    & \textbf{Estado de Verificación y Volumen} \\
+    \midrule
+    \endhead
+
+    \midrule
+    \multicolumn{4}{r}{{Continúa en la siguiente página}} \\
+    \endfoot
+
+    \bottomrule
+    \endlastfoot
+
+    \textbf{Validaciones Troncales}
+    &
+    Portal Datos Abiertos TransMilenio~\cite{transmilenio2026datos}
+    &
+    Público / Abierto
+    &
+    Verificado: descargado y procesado
+    (41.25 millones de registros)
+    \\ \hline
+
+    \textbf{Salidas de Torniquetes}
+    &
+    Portal Datos Abiertos TransMilenio~\cite{transmilenio2026datos}
+    &
+    Público / Abierto
+    &
+    Verificado: descargado y procesado
+    (3.67 millones de registros)
+    \\ \hline
+
+    \textbf{Especificación GTFS}
+    &
+    TransMilenio GTFS Feed Oficial~\cite{transmilenio2026datos}
+    &
+    Público / Abierto
+    &
+    Auditado: \texttt{stops}, \texttt{trips},
+    \texttt{stop\_times}, \texttt{calendar}
+    \\ \hline
+
+    \textbf{Geometría de Estaciones}
+    &
+    Capa GeoJSON de Infraestructura~\cite{transmilenio2026datos}
+    &
+    Público / Abierto
+    &
+    Integrado: coordenadas geodésicas
+    (Lat, Lon) de todas las estaciones del sistema (150).
+    \\
+
+\end{longtable}
+
+
+\section{Hipótesis Preliminar De Solución Con IA}
+
+
+\subsection{Hipótesis Formal de Trabajo}
+
+Se plantea la hipótesis exploratoria de que, mediante un enfoque de Búsqueda Heurística y Optimización Combinatoria Basada en Simulación, el agente racional encontrará una asignación óptima de frecuencias de despacho que reduzca significativamente los tiempos de espera en andén y la aglomeración de pasajeros al cierre de la hora pico, sin requerir la compra de flota adicional.
+
+\subsection{Justificación Teórica y Arquitectónica del Enfoque}
+
+Ya que no existe un histórico de ``horarios óptimos etiquetados'' para entrenar un modelo supervisado. La solución requiere un proceso de optimización donde un modelo de simulación evalúe las dinámicas no lineales de colas y tiempos de parada, podría desarrollarse con un algoritmo metaheurístico (búsqueda estocástica o evolutiva) que explore de forma guiada el espacio de planes de despacho, acoplado a un simulador de eventos discretos alimentado con datos históricos de validaciones GTFS, para lograr reducir el tiempo promedio de espera de los usuarios en plataforma en comparación con la programación estática actual, para poder garantizar respuestas en tiempo de ejecución viables para la gestión operativa del sistema.
+
+
+\section{Métricas de Éxito}
+
+
+\begin{longtable}{|>{\bfseries}p{0.20\textwidth} |p{0.19\textwidth} |p{0.33\textwidth} |p{0.24\textwidth}|}
+    \caption{Métricas y criterios de evaluación de FlowTM}
+    \label{tab:metricas-flowtm} \\
+
+    \toprule
+    \textbf{Nivel de Evaluación}
+    & \textbf{Métrica Específica}
+    & \textbf{Definición y Justificación}
+    & \textbf{Meta Cuantitativa de Éxito} \\
+    \midrule
+    \endfirsthead
+
+    \multicolumn{4}{c}%
+    {{\tablename\ \thetable{} -- continuación}} \\
+    \toprule
+    \textbf{Nivel de Evaluación}
+    & \textbf{Métrica Específica}
+    & \textbf{Definición y Justificación}
+    & \textbf{Meta Cuantitativa de Éxito} \\
+    \midrule
+    \endhead
+
+    \midrule
+    \multicolumn{4}{r}{{Continúa en la siguiente página}} \\
+    \endfoot
+
+    \bottomrule
+    \endlastfoot
+
+    \multirow{4}{=}{\textbf{Métricas del Problema Real}\\
+    \textbf{(Impacto Operativo)}}
+    &
+    Tiempo Medio de Espera
+    (\(W_{\mathrm{prom}}\))
+    &
+    Minutos promedio que los usuarios pasan en el andén antes de
+    abordar. Mide la calidad percibida del servicio.
+    &
+    Reducción \(\geq 15\%\) respecto al esquema base.
+    \\ \cline{2-4}
+
+    &
+    Usuarios en Plataforma al Corte
+    (\(Q_{\mathrm{rem}}\))
+    &
+    Cantidad de pasajeros acumulados en estaciones que no logran
+    abordar al culminar la hora pico.
+    &
+    Reducción \(\geq 25\%\) respecto al esquema base.
+    \\ \cline{2-4}
+
+    &
+    Fracción de Sobrecupo Crítico
+    &
+    Porcentaje de buses despachados cuya ocupación alcanza o supera
+    el 95\% de capacidad (\(\geq 152\) pasajeros).
+    &
+    Contención del sobrecupo extremo en vehículos evitando trasladar
+    la saturación.
+    \\ \cline{2-4}
+
+    &
+    Uso Total de Flota
+    &
+    Cantidad máxima de buses en circulación requerida para sostener
+    el horario optimizado.
+    &
+    Cumplimiento estricto de la flota máxima asignada
+    (\(0\) costo de capital).
+    \\ \hline
+
+    \multirow{2}{=}{\textbf{Métricas del Modelo de IA}\\
+    \textbf{(Desempeño Computacional)}}
+    &
+    Ganancia de Utilidad
+    (\(\Delta U\))
+    &
+    Diferencia neta positiva entre la función de utilidad del horario
+    propuesto frente al horario inicial.
+    &
+    Diferencia de las utilidades \(U > 0\) con convergencia hacia
+    una meseta estable.
+    \\ \cline{2-4}
+
+    &
+    Tiempo de Cómputo por Ventana
+    &
+    Tiempo de ejecución necesario para completar la exploración
+    heurística de una franja de 3 horas.
+    &
+    Tiempo de cómputo razonable para reprogramación operativa.
+    \\
+
+\end{longtable}
+
+
+
+
+
+\section{Supuestos y Limitaciones Técnicas}
+
+\textbf{Supuestos Asumidos:}
+
+\begin{enumerate}
+  \item Los pasajeros abordan en orden estricto de llegada (disciplina FIFO) sin abandonar la fila. 
+  \item La elección de ruta se basa en el principio de abordar el primer servicio disponible que arribe hacia su destino. 
+  \item Se asume una velocidad comercial promedio uniforme y representativa para el corredor.
+  \item No se tendrán en cuenta afectaciones ajenas a la operación del sistema.
+\end{enumerate}
+
+\textbf{Limitaciones Técnicas: }
+
+\begin{enumerate}
+  \item No se cuenta con seguimiento GPS en tiempo real de cada vehículo individual.
+  \item Las matrices de viaje origen-destino se infieren probabilísticamente a partir de registros agregados de torniquete.
+  \item El alcance inicial del modelo se delimita a un corredor troncal representativo de la ciudad y a 6 servicios troncales.
+\end{enumerate}
+ 
 
 
 
