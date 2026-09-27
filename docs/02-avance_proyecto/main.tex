@@ -1,0 +1,242 @@
+\documentclass{article}
+
+\usepackage{amsmath, amsthm, amssymb, amsfonts}
+\usepackage{thmtools}
+\usepackage{graphicx}
+\usepackage{setspace}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage[backend=biber,style=ieee,sorting=ynt]{biblatex}
+\usepackage[hidelinks]{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{framed}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{tcolorbox}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usetikzlibrary{arrows.meta}
+\usepackage{caption}
+\usepackage{longtable}
+\usepackage{pdflscape}
+\usepackage{svg}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{cancel}
+\usepackage{fancyhdr}
+
+\addbibresource{referencias.bib}
+
+
+\colorlet{LightGray}{White!90!Periwinkle}
+\colorlet{LightOrange}{Orange!15}
+\colorlet{LightGreen}{Green!15}
+
+
+
+\newcommand{\HRule}[1]{\rule{\linewidth}{#1}}
+
+\declaretheoremstyle[name=Theorem,]{thmsty}
+\declaretheorem[style=thmsty,numberwithin=section]{theorem}
+\tcolorboxenvironment{theorem}{colback=LightGray}
+
+\declaretheoremstyle[name=Proposition,]{prosty}
+\declaretheorem[style=prosty,numberlike=theorem]{proposition}
+\tcolorboxenvironment{proposition}{colback=LightOrange}
+
+\declaretheoremstyle[name=Principle,]{prcpsty}
+\declaretheorem[style=prcpsty,numberlike=theorem]{principle}
+\tcolorboxenvironment{principle}{colback=LightGreen}
+
+\newcolumntype{L}[1]{>{\raggedleft\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+\hypersetup{
+    pdftitle={Avance De Proyecto II: Formulación Del Problema Como Agente Inteligente},
+    pdfauthor={Alvarado Ludwig, Pinilla Kevin, Mahecha Alberto, Ospina María},
+    pdfsubject={Avance proyecto},
+    pdfkeywords={proyecto, agentes},
+    pdfcreator={GNU Emacs desde Arch GNU/Linux (btw) y LaTeX con hyperref},
+    pdfproducer={pdflatex}
+}
+
+
+\setstretch{1.2}
+\geometry{
+    textheight=9in,
+    textwidth=5.5in,
+    top=1in,
+    headheight=12pt,
+    headsep=25pt,
+    footskip=30pt
+}
+
+\lstdefinestyle{bashstyle}{
+    language=bash,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+\lstdefinestyle{javastyle}{
+    language=Java,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+\lstdefinestyle{cppstyle}{
+    language=C++,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[C]{\thepage}
+\fancyfoot[C]{\footnotesize \thepage \quad \textbar{} \quad Este trabajo está bajo una licencia CC BY-SA 4.0.\\ Más info: \url{https://creativecommons.org/licenses/by/4.0/}}
+
+
+% ------------------------------------------------------------------------------
+
+\begin{document}
+
+% ------------------------------------------------------------------------------
+% Cover Page and ToC
+% ------------------------------------------------------------------------------
+
+\title{ \normalsize \textsc{}
+	\\ [2.0cm]
+	\HRule{1.5pt} \\
+	\LARGE \textbf{\uppercase{FORMULACIÓN DEL PROBLEMA COMO AGENTE INTELIGENTE}
+		\HRule{2.0pt} \\ [0.6cm] \LARGE{Universidad de Bogotá Jorge Tadeo Lozano} \vspace*{11\baselineskip}}
+}
+\date{}
+\author{\textbf{Alvarado Becerra Ludwig} \\
+  \textbf{Pinilla Naranjo Kevin} \\
+  \textbf{Mahecha Reyes Alberto} \\
+  \textbf{Ospina Rocha María} \\ 
+	 Inteligencia Artificial - 2026-2S}
+
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+\tableofcontents
+\listoffigures
+\listoftables
+\thispagestyle{empty}
+\newpage
+\setcounter{page}{1}
+
+\section{Descripción y Justificación del Problema}
+
+El sistema de transporte masivo TransMilenio en Bogotá enfrenta severos problemas de congestión durante las horas pico, caracterizados por andenes colapsados en estaciones clave y tiempos de espera impredecibles para los usuarios~\cite{newell1982queueing,transmilenio2026datos}. Según cifras oficiales de TransMilenio, el sistema moviliza más de 2 millones de viajes diarios~\cite{transmilenio2026datos}.
+
+La causa principal de esta situación radica en la rigidez de la programación de despachos, la cual genera una asimetría de ocupación: mientras las rutas corrientes experimentan saturación severa dejando pasajeros varados en plataforma, los servicios expresos que transitan de forma paralela operan con capacidad ociosa~\cite{mobilitydata2026gtfs,transmilenio2026datos}.
+
+La adquisición de nuevos vehículos no es viable a corto plazo debido a su elevado costo de capital (aproximadamente $1.5 millones USD por bus) y a la saturación de la capacidad física en los patios operativos~\cite{russell2020artificial}. Por lo tanto, la alternativa viable consiste en formular un Agente Inteligente capaz de optimizar y redistribuir los intervalos de despacho sobre la flota existente, haciendo coincidir la oferta de transporte con los requerimientos reales de la demanda~\cite{russell2020artificial}.
+
+\section{Definición Del Agente Inteligente}
+
+Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (FlowTM-Scheduler)}.
+
+\begin{itemize}
+  \item \textbf{Entidad Operativa:} No se confunde con la interfaz gráfica ni con el motor de almacenamiento. El agente es el software decisor que evalúa el estado del corredor y determina la asignación algorítmica de frecuencias de paso para las rutas en operación.
+  \item \textbf{Decisión que toma:} El agente decide el Vector de Intervalos de Despacho \(H = \{h_r\}\) para cada ruta \(r ∈ {B13, B18, B23, B27, B74, B75}\) en minutos, restringido por la flota finita disponible:
+
+        Decisión: \(H = \{ h_{B13}, h_{B18}, h_{B23}, h_{B27}, h_{B74}, h_{B75}\} \in [2.0, 15.0]^6 \subset \mathbb{R}^6\)
+
+        Sujeto a: \(\sum_r B_{usados}(h_r) \leq B_{max}\). Donde: \(B_{max}\) es una constante, la flota física acotada, en total 106 buses, \(B_{usados}\) se define como:
+
+        \[
+        B_{usados}(h_r) = \dfrac{t_{sim}}{h_r}
+        \]
+
+        \(t_{sim}\) es el tiempo en minutos que dura la simulación.
+
+\end{itemize}
+
+\section{Modelo PEAS/REAS}
+
+
+\addcontentsline{toc}{section}{Referencias}
+\printbibliography
+
+\newpage
+
+\thispagestyle{empty}
+
+\vspace*{0.3\textwidth}
+
+\begin{figure}[H]
+  \centering
+  \includesvg[width=\textwidth]{img/LogoUtadeo.svg}
+\end{figure}
+
+
+
+\end{document}
