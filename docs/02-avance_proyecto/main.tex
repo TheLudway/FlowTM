@@ -308,7 +308,7 @@ Se define como agente al \textbf{Despachador Racional de Frecuencias Troncales (
 
   \item \textbf{Secuencial:} Las frecuencias asignadas a las 06:00 a.m. condicionan directamente el tamaño de las colas y la disponibilidad de flota a las 07:30 a.m.
 
-  \item \textbf{Continuo:} El tiempo físico y el desplazamiento espacial de los buses fluyen continuamente, requiriendo su integración numérica en SimPy.
+  \item \textbf{Continuo:} El tiempo físico y el desplazamiento espacial de los buses fluyen continuamente.
 
   \item \textbf{Individual / Centralizado:} Existe un único agente decisor global responsable de optimizar el corredor completo.
 
@@ -324,7 +324,7 @@ El proceso continuo del agente se estructura en 5 pasos fundamentales:
   \item Paso 2 (Simular): Prueba internamente un esquema de horarios propuesto y proyecta la acumulación de filas en andén, la ocupación de los buses y el tiempo de parada por estación mediante balance de flujos.
   \item Paso 3 (Evaluar): Calcula la puntuación del esquema simulado comparándolo contra el horario base mediante la función de utilidad U(S).
   \item Paso 4 (Decidir): Selecciona la configuración de intervalos que ofrece el mejor balance entre menor tiempo de espera y menor sobrecupo, sin sobrepasar el límite de 106 buses.
-  \item Paso 5 (Actuar): Genera y exporta la tabla final de programación en formato GTFS (frequencies.txt) para su ejecución operativa en la flota.
+  \item Paso 5 (Actuar): Genera y exporta la tabla final de programación en formato GTFS (frequencies.txt).
 \end{enumerate}
 
 
@@ -369,7 +369,7 @@ El proceso continuo del agente se estructura en 5 pasos fundamentales:
     Público / Abierto
     &
     Verificado: descargado y procesado
-    (41.25 millones de registros)
+    (41.25 millones de registros). Datos del 01 al 31 de agosto.
     \\ \hline
 
     \textbf{Salidas de Torniquetes}
@@ -379,7 +379,7 @@ El proceso continuo del agente se estructura en 5 pasos fundamentales:
     Público / Abierto
     &
     Verificado: descargado y procesado
-    (3.67 millones de registros)
+    (3.67 millones de registros). Datos del 01 al 31 de agosto.
     \\ \hline
 
     \textbf{Especificación GTFS}
@@ -389,7 +389,7 @@ El proceso continuo del agente se estructura en 5 pasos fundamentales:
     Público / Abierto
     &
     Auditado: \texttt{stops}, \texttt{trips},
-    \texttt{stop\_times}, \texttt{calendar}
+    \texttt{stop\_times}, \texttt{calendar}. Datos del 27 de julio de 2026.
     \\ \hline
 
     \textbf{Geometría de Estaciones}
@@ -399,7 +399,7 @@ El proceso continuo del agente se estructura en 5 pasos fundamentales:
     Público / Abierto
     &
     Integrado: coordenadas geodésicas
-    (Lat, Lon) de todas las estaciones del sistema (150).
+    (Lat, Lon) de todas las estaciones del sistema (150). Datos del 11 de mayo de 2026.
     \\
 
 \end{longtable}
