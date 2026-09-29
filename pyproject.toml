@@ -62,6 +62,7 @@ select = [
     "C4",
     "RET",
     "RUF",
+    "ANN",
 ]
 
 # Rules that are intentionally disabled.
