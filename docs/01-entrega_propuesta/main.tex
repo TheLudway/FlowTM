@@ -1,0 +1,245 @@
+\documentclass{article}
+
+\usepackage{amsmath, amsthm, amssymb, amsfonts}
+\usepackage{thmtools}
+\usepackage{graphicx}
+\usepackage{setspace}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage[backend=biber,style=ieee,sorting=ynt]{biblatex}
+\usepackage[hidelinks]{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{framed}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{tcolorbox}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usetikzlibrary{arrows.meta}
+\usepackage{caption}
+\usepackage{longtable}
+\usepackage{pdflscape}
+\usepackage{svg}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{cancel}
+\usepackage{fancyhdr}
+
+\addbibresource{referencias.bib}
+
+
+\colorlet{LightGray}{White!90!Periwinkle}
+\colorlet{LightOrange}{Orange!15}
+\colorlet{LightGreen}{Green!15}
+
+
+
+\newcommand{\HRule}[1]{\rule{\linewidth}{#1}}
+
+\declaretheoremstyle[name=Theorem,]{thmsty}
+\declaretheorem[style=thmsty,numberwithin=section]{theorem}
+\tcolorboxenvironment{theorem}{colback=LightGray}
+
+\declaretheoremstyle[name=Proposition,]{prosty}
+\declaretheorem[style=prosty,numberlike=theorem]{proposition}
+\tcolorboxenvironment{proposition}{colback=LightOrange}
+
+\declaretheoremstyle[name=Principle,]{prcpsty}
+\declaretheorem[style=prcpsty,numberlike=theorem]{principle}
+\tcolorboxenvironment{principle}{colback=LightGreen}
+
+\newcolumntype{L}[1]{>{\raggedleft\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+\hypersetup{
+    pdftitle={Propuesta proyecto GTFS Transmilenio},
+    pdfauthor={Alvarado Becerra Ludwig, Mahecha Reyes Albert, Ospina Rocha María Fernanda, Pinilla Naranjo Kevin Adrián},
+    pdfsubject={Descripción del documento},
+    pdfkeywords={palabras, interesantes},
+    pdfcreator={overleaf2.ludwigalvarado.me},
+    pdfproducer={pdflatex}
+}
+
+
+\setstretch{1.2}
+\geometry{
+    textheight=9in,
+    textwidth=5.5in,
+    top=1in,
+    headheight=12pt,
+    headsep=25pt,
+    footskip=30pt
+}
+
+\lstdefinestyle{bashstyle}{
+    language=bash,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+\lstdefinestyle{javastyle}{
+    language=Java,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+\lstdefinestyle{cppstyle}{
+    language=C++,
+    basicstyle=\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=tb,
+    rulecolor=\color{black!70},
+    framerule=0.5pt,
+    tabsize=4,
+    captionpos=b
+}
+
+
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[C]{\thepage}
+\fancyfoot[C]{\footnotesize \thepage \quad \textbar{} \quad Este trabajo está bajo una licencia CC BY-SA 4.0.\\ Más info: \url{https://creativecommons.org/licenses/by/4.0/}}
+
+
+% ------------------------------------------------------------------------------
+
+\begin{document}
+
+% ------------------------------------------------------------------------------
+% Cover Page and ToC
+% ------------------------------------------------------------------------------
+
+\title{ \normalsize \textsc{}
+	\\ [2.0cm]
+	\HRule{1.5pt} \\
+	\LARGE \textbf{\uppercase{FlowTM}
+		\HRule{2.0pt} \\ [0.6cm] \LARGE{Agente racional para la optimización multiobjetivo de frecuencias y horarios de Transmilenio mediante GTFS} \vspace*{10\baselineskip}}
+}
+\date{}
+\author{\textbf{Alvarado Becerra Ludwig} \\
+\textbf{Mahecha Reyes Albert}\\
+\textbf{Ospina Rocha María Fernanda} \\ 
+\textbf{Pinilla Naranjo Kevin Adrián} \\ 
+	 Inteligencia Artificial - 2026-2S}
+
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+\tableofcontents
+\thispagestyle{empty}
+\newpage
+\setcounter{page}{1}
+
+\section{Descripción del problema}
+
+TransMilenio, el sistema de transporte masivo de Bogotá, transporta diariamente cerca de dos millones de individuos por medio de su elemento troncal y zonal~\cite{transmilenio2024informe}. Sin embargo, la operación enfrenta un grave desbalance estructural entre los buses programados y la fluctuante demanda de pasajeros, sobre todo en las horas pico de la mañana y la tarde~\cite{transmilenio2024informe,bogotacomovamos2024encuesta}. El 49\% de los usuarios manifiesta un profundo desagrado ante las largas esperas en las plataformas, y el 49,2\% se queja de la congestión y los prolongados tiempos de viaje en los buses articulados, según la Encuesta Bogotá Cómo Vamos, ``Encuesta de Percepción Ciudadana 2024: Movilidad y Calidad de Vida en Bogotá,''~\cite{bogotacomovamos2024encuesta}
+
+El sistema opera bajo una planificación de frecuencias y tablas horarias definida en su especificación estática GTFS (General Transit Feed Specification), la cual establece de forma fija la oferta de buses por ruta en cada franja horaria~\cite{transmilenio2026datosabiertos}. No obstante, la demanda real no se distribuye de manera uniforme entre las rutas que comparten un mismo corredor troncal, sino que varía de acuerdo con la hora, los patrones de origen-destino y la dinámica urbana~\cite{transmilenio2024informe,transmilenio2026datosabiertos}. 
+
+Esta discrepancia entre una oferta fija y una demanda estocástica genera asimetrías operativas observables: mientras rutas de alta afluencia operan con sobreocupación crítica y tiempos de espera desbordados, rutas paralelas en el mismo corredor circulan con capacidad ociosa e intervalos subutilizados~\cite{bogotacomovamos2024encuesta,yang2020multiobjective}. Actualmente, la planificación del GTFS carece de mecanismos computacionales automatizados de ajuste que respondan con agilidad a estos patrones~\cite{yang2020multiobjective}. 
+
+Ante la disponibilidad de datos abiertos oficiales publicados por TransMilenio (malla GTFS y registros históricos de validaciones horarias en estaciones)~\cite{transmilenio2026datosabiertos}, existe la oportunidad de abordar este problema mediante un Agente Racional. Este agente percibirá el estado de la red y la demanda, procesará la información mediante una función de utilidad multicriterio (balanceando tiempo de espera, nivel de ocupación y costo de flota) y actuará proponiendo ajustes a las frecuencias de despacho en el GTFS, respetando las restricciones operativas reales del sistema~\cite{yang2020multiobjective,russell2020artificial}. 
+
+
+
+\section{Objetivos}
+
+\subsection{General}
+
+Diseñar e implementar un agente racional basado en inteligencia artificial que, a partir del análisis de datos históricos de oferta y demanda del sistema TransMilenio, proponga modificaciones a la planificación de frecuencias en la especificación GTFS con el fin de reducir el desequilibrio de ocupación entre rutas de un mismo corredor, sujeto a las restricciones operativas del sistema. 
+
+ 
+\subsection{Específicos}
+
+\begin{itemize}
+    \item Formalizar el entorno y la estructura PEAS del agente mediante la estructuración del espacio de estados, acciones, supuestos y restricciones operativas a partir de los datos abiertos de la red GTFS y las validaciones horarias del Portal de Datos Abiertos de TransMilenio~\cite{transmilenio2026datosabiertos}. 
+    \item Diseñar y calibrar una función de utilidad multicriterio que cuantifique matemáticamente el costo por tiempo de espera de los usuarios, el factor de sobreocupación vehicular y la penalización por uso ineficiente de la flota disponible.  
+    \item Implementar un entorno de simulación de eventos discretos que represente el comportamiento de un corredor troncal piloto, permitiendo al agente interactuar con el entorno y evaluar el impacto de sus decisiones de despacho en horas pico. 
+    \item Evaluar el desempeño del algoritmo de optimización del agente frente a la malla GTFS estática actual, verificando la convergencia del modelo y cuantificando la reducción porcentual en los tiempos de espera y el balance de carga en los buses. 
+\end{itemize}
+
+
+\section{Enlace vídeo}
+
+Entrar con el correo \texttt{utadeo.edu.co}
+
+\href{https://utadeoeduco0-my.sharepoint.com/:v:/g/personal/ludwig_alvaradob_utadeo_edu_co/IQCiziMBhBLFRr7USRWr229VAeKW1t1dJSIDF9qKpHm_7K4?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=Zf0X3v}{\textbf{Aquí}}
+
+
+\addcontentsline{toc}{section}{Referencias}
+\printbibliography
+
+\newpage
+
+\thispagestyle{empty}
+
+\vspace*{0.3\textwidth}
+
+\begin{figure}[H]
+  \centering
+  \includesvg[width=\textwidth]{img/LogoUtadeo.svg}
+\end{figure}
+
+
+
+\end{document}
