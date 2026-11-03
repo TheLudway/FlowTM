@@ -24,7 +24,9 @@ export interface RouteConfig {
   name: string;
   service: string;
   color: string;
+  role?: 'optimizable' | 'fondo';
   headway_min: number;
+  cycle_time_min?: number;
   stops: string[];
   stops_count: number;
   bus_type?: BusTypology;
@@ -65,6 +67,18 @@ export interface SummaryKPIs {
   sim_duration_sec: number;
   start_hour: number;
   stranded_passengers_in_queue?: number;
+  avg_dispatch_delay_min?: number;
+  optimizable_routes?: number;
+  od_top?: ODPair[];
+}
+
+export interface ODPair {
+  origin: string;
+  destination: string;
+  origin_name: string;
+  destination_name: string;
+  passengers: number;
+  share_pct: number;
 }
 
 export interface InterpolatedBus {
@@ -153,5 +167,8 @@ export interface AIOptimizationLog {
     transported_pax: number;
   };
   delta_utility: number;
+  max_fleet?: number;
+  optimizable_routes?: string[];
+  background_routes?: string[];
   history: AIOptimizationIteration[];
 }

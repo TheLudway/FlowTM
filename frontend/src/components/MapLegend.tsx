@@ -11,6 +11,11 @@ interface MapLegendProps {
 }
 
 export const MapLegend: React.FC<MapLegendProps> = ({ routes }) => {
+  const routesByType = (type: string) =>
+    routes
+      .filter((r) => (r.bus_type ?? 'articulado') === type)
+      .map((r) => r.id)
+      .join(', ');
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -61,7 +66,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ routes }) => {
                   <div className="typology-info">
                     <span className="typology-name">🚍 Articulado (18 metros)</span>
                     <span className="typology-specs">Capacidad: 160 pasajeros • 3 puertas • Fuelle simple</span>
-                    <span className="typology-routes">Servicios B18, B23, B74</span>
+                    <span className="typology-routes">{routesByType('articulado') || 'Sin servicios'}</span>
                   </div>
                 </div>
 
@@ -72,7 +77,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ routes }) => {
                   <div className="typology-info">
                     <span className="typology-name">🚌 Biarticulado (27 metros)</span>
                     <span className="typology-specs">Capacidad: 250 pasajeros • 4 puertas • Doble fuelle articulado</span>
-                    <span className="typology-routes">Servicios B13, B27, B75 (Alta Demanda Troncal)</span>
+                    <span className="typology-routes">{routesByType('biarticulado') || 'Sin servicios (el GTFS no publica tipología; se asume articulado)'}</span>
                   </div>
                 </div>
               </div>
