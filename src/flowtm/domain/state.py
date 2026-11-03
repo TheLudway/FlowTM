@@ -10,66 +10,59 @@
 flowtm.domain.state
 ===================
 State space representation and neighborhood search actions for the Rational Agent.
-Encapsulates dispatch headways for the 6 trunk corridor routes:
-B13, B18, B23, B27, B74, B75.
 
-Mathematical Formulation (from Avance II Project Document):
-    Decision: H = { h_B13, h_B18, h_B23, h_B27, h_B74, h_B75 } in [2.0, 15.0]^6 subset R^6
-    Constraint: sum_r B_used(h_r) <= B_max = 106 buses
-    where B_used(h_r) = ceil(TiempoCiclo_r / h_r)
+Mathematical formulation (Avance II):
+    Decision:   H = { h_r } in [2.0, 15.0]^n for the n optimizable routes
+    Constraint: sum_r B_used(h_r) <= B_max
+    where (Little's law per direction)
+        B_used(h_r) = ceil((T_r^ida + L) / h_r) + B_r^regreso
+    T_r^ida is the GTFS peak trip time of the optimized (southbound) leg, L the
+    terminal layover, and B_r^regreso the vehicles the return route needs at its
+    own GTFS headway (fixed, not optimized). B_max is the fleet the current GTFS
+    operation requires for those routes.
+
+Leg times, return fleets and B_max come from the scenario
+(``CorridorScenario.base_schedule``), never from constants.
 """
 
 import math
 import random
 from dataclasses import dataclass, field
 
-# Calibrated cycle times (in minutes) for the 6 trunk services operating
-# on the Autopista Norte - Caracas corridor (round-trip + terminal regulation)
-OFFICIAL_CYCLE_TIMES_MIN: dict[str, float] = {
-    "B13": 50.0,
-    "B18": 40.0,
-    "B23": 45.0,
-    "B27": 48.0,
-    "B74": 48.0,
-    "B75": 44.0,
-}
+MIN_HEADWAY_MIN = 2.0
+MAX_HEADWAY_MIN = 15.0
 
-MAX_FLEET_CAPACITY: int = 106
+
+def clip_headway(headway_min: float) -> float:
+    """Clamp a headway to the operational bounds [2.0, 15.0] minutes."""
+    return max(MIN_HEADWAY_MIN, min(MAX_HEADWAY_MIN, round(headway_min, 2)))
 
 
 @dataclass
 class ScheduleState:
     """
-    Rational Agent State:
-    Dictionary mapping route codes to dispatch headways (intervals between buses) in minutes.
+    Rational Agent State: dispatch headway (minutes) per optimizable route.
 
-    Example for the 6 official corridor services (Peak Hour):
-        {
-            'B13': 2.0,
-            'B18': 2.0,
-            'B23': 3.0,
-            'B27': 4.0,
-            'B74': 4.0,
-            'B75': 2.0
-        }
+    Attributes:
+        headways: Route code -> headway in minutes of the optimized leg.
+        leg_times: Route code -> trip time + terminal layover (minutes) of the
+            optimized leg.
+        max_fleet: Physical fleet bound B_max.
+        fixed_fleet: Route code -> vehicles of the return leg (fixed GTFS headway).
     """
 
     headways: dict[str, float]
-    cycle_times: dict[str, float] = field(
-        default_factory=lambda: OFFICIAL_CYCLE_TIMES_MIN.copy()
-    )
-    max_fleet: int = MAX_FLEET_CAPACITY
+    leg_times: dict[str, float]
+    max_fleet: int
+    fixed_fleet: dict[str, int] = field(default_factory=dict)
 
     def fleet_used_by_route(self) -> dict[str, int]:
-        """
-        Calculates fleet consumed by each route according to the formula:
-        B_used(h_r) = ceil(TiempoCiclo_r / h_r)
-        """
-        usage: dict[str, int] = {}
-        for route, h in self.headways.items():
-            c_time = self.cycle_times.get(route, 45.0)
-            usage[route] = math.ceil(c_time / max(0.1, h))
-        return usage
+        """Buses per route: ceil(leg_time / h) + fixed return-leg fleet."""
+        return {
+            route: math.ceil(self.leg_times[route] / max(0.1, headway))
+            + self.fixed_fleet.get(route, 0)
+            for route, headway in self.headways.items()
+        }
 
     def total_fleet_used(self) -> int:
         """Total buses required across all routes: sum_r B_used(h_r)."""
@@ -83,8 +76,9 @@ class ScheduleState:
         """Return an independent copy of this state."""
         return ScheduleState(
             headways=self.headways.copy(),
-            cycle_times=self.cycle_times.copy(),
+            leg_times=self.leg_times.copy(),
             max_fleet=self.max_fleet,
+            fixed_fleet=self.fixed_fleet.copy(),
         )
 
     def generate_neighbor(
@@ -124,17 +118,18 @@ class ScheduleState:
             route_boost = rng.choice(routes)
             route_trim = rng.choice([r for r in routes if r != route_boost])
 
-            candidate_headways[route_boost] = max(
-                2.0, min(15.0, round(candidate_headways[route_boost] - step_min, 2))
+            candidate_headways[route_boost] = clip_headway(
+                candidate_headways[route_boost] - step_min
             )
-            candidate_headways[route_trim] = max(
-                2.0, min(15.0, round(candidate_headways[route_trim] + step_min, 2))
+            candidate_headways[route_trim] = clip_headway(
+                candidate_headways[route_trim] + step_min
             )
 
             candidate_state = ScheduleState(
                 headways=candidate_headways,
-                cycle_times=self.cycle_times,
+                leg_times=self.leg_times,
                 max_fleet=self.max_fleet,
+                fixed_fleet=self.fixed_fleet,
             )
             if candidate_state.is_fleet_feasible():
                 return candidate_state
