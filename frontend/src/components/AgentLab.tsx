@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Brain, Lightning, MapTrifold, Play, Stop, Warning } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, Brain, Lightning, MapTrifold, Play, Stop, Warning } from '@phosphor-icons/react';
 import type {
   AgentRunPayload,
   AIOptimizationIteration,
   AIOptimizationLog,
   HoldoutReport,
+  OptimizedSource,
   PairedStat,
   ReplayPayload,
   RouteConfig,
@@ -121,10 +122,193 @@ const StatRow: React.FC<{ label: string; stat: PairedStat; digits: number; unit?
   );
 };
 
+interface RunParams {
+  algorithm: Algorithm;
+  budget: number;
+  seeds: number;
+  step: number;
+  searchSeed: number;
+  maxFleet: number | null;
+  weights: Weights;
+}
+
+interface LabRun {
+  id: number;
+  finishedAt: string;
+  params: RunParams;
+  result: AgentResult;
+  history: AIOptimizationIteration[];
+}
+
+const COMPARE_METRICS: { key: keyof HoldoutReport; label: string; absolute?: boolean; digits: number }[] = [
+  { key: 'utilidad', label: 'U(S)', absolute: true, digits: 4 },
+  { key: 'espera_min', label: 'Espera', digits: 2 },
+  { key: 'sobrecupo_pct', label: 'Sobrecupo', digits: 2 },
+  { key: 'varados', label: 'Varados', digits: 2 },
+  { key: 'transportados', label: 'Transport.', digits: 2 },
+];
+
+const weightsLabel = (w: Weights) => {
+  const total = w.espera + w.sobrecupo + w.varados + w.flota || 1;
+  const pct = (v: number) => Math.round((v / total) * 100);
+  return `${pct(w.espera)}/${pct(w.sobrecupo)}/${pct(w.varados)}/${pct(w.flota)}`;
+};
+
+/** Side-by-side comparison of the official optimum and every Lab run. */
+const RunComparison: React.FC<{
+  runs: LabRun[];
+  officialLog: AIOptimizationLog | null;
+  defaultWeights: Weights;
+  activeRunId?: number;
+  officialOnMap: boolean;
+  onShow: (run: LabRun) => void;
+  onShowOfficial: () => void;
+  onLoadParams: (params: RunParams) => void;
+  onRemove: (id: number) => void;
+}> = ({ runs, officialLog, defaultWeights, activeRunId, officialOnMap, onShow, onShowOfficial, onLoadParams, onRemove }) => {
+  type Row = {
+    key: string;
+    name: string;
+    detail: string;
+    weights: string;
+    fleet: string;
+    validation: HoldoutReport;
+    run?: LabRun;
+    onMap: boolean;
+  };
+  const rows: Row[] = [];
+  const official = officialLog?.holdout;
+  if (official) {
+    const config = (officialLog?.config ?? {}) as Record<string, unknown>;
+    rows.push({
+      key: 'oficial',
+      name: '★ Óptimo oficial del agente',
+      detail: `Recocido simulado · ${config.budget ?? '—'} horarios × ${(config.training_seeds as number[] | undefined)?.length ?? '—'} semillas`,
+      weights: weightsLabel(defaultWeights),
+      fleet: `${official.flota.base} → ${official.flota.candidato}`,
+      validation: official,
+      onMap: officialOnMap,
+    });
+  }
+  for (const labRun of runs) {
+    rows.push({
+      key: `run-${labRun.id}`,
+      name: `Prueba #${labRun.id} · ${labRun.finishedAt}`,
+      detail: `${ALGORITHM_LABELS[labRun.params.algorithm]} · ${labRun.params.budget} × ${labRun.params.seeds} · paso ${labRun.params.step} · semilla ${labRun.params.searchSeed}`,
+      weights: weightsLabel(labRun.params.weights),
+      fleet: `${labRun.result.validacion.flota.base} → ${labRun.result.validacion.flota.candidato}${
+        labRun.params.maxFleet !== null ? ` (cota ${labRun.params.maxFleet})` : ''
+      }`,
+      validation: labRun.result.validacion,
+      run: labRun,
+      onMap: activeRunId === labRun.id,
+    });
+  }
+
+  // Best value per metric (most favorable change), marked with a star.
+  const best = new Map<string, string>();
+  for (const metric of COMPARE_METRICS) {
+    let bestKey: string | null = null;
+    let bestScore = -Infinity;
+    for (const row of rows) {
+      const stat = row.validation[metric.key] as PairedStat;
+      const lowerIsBetter = metric.key !== 'utilidad' && metric.key !== 'transportados';
+      const score = lowerIsBetter ? -stat.diferencia_pct : metric.absolute ? stat.diferencia : stat.diferencia_pct;
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = row.key;
+      }
+    }
+    if (bestKey && rows.length > 1) best.set(metric.key, bestKey);
+  }
+
+  return (
+    <section className="lab-card lab-compare">
+      <h4 className="lab-card-title">
+        Comparativo de configuraciones
+        <MetricTooltip
+          title="Cómo leer el comparativo"
+          description="Cada fila es un horario y su cambio frente a la operación actual de TransMilenio, medido en días simulados que la IA no vio (30 para el óptimo oficial, 10 para las pruebas). Pesos = espera/sobrecupo/varados/flota en %."
+          interpretation="Verde: mejora confirmada; rojo: empeora (confirmado); gris: sin cambio demostrable. ★ marca el mejor valor de cada columna. Así se ve qué configuración reduce más cada proceso y a qué costo."
+        />
+      </h4>
+      <div className="lab-compare-scroll">
+        <table className="lab-compare-table">
+          <thead>
+            <tr>
+              <th>Configuración</th>
+              <th>Pesos E/S/V/F</th>
+              {COMPARE_METRICS.map((m) => (
+                <th key={m.key}>{m.label}</th>
+              ))}
+              <th>Flota</th>
+              <th>Días</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} className={`${row.run ? '' : 'official-row'} ${row.onMap ? 'on-map' : ''}`}>
+                <td>
+                  <div className="cmp-name">{row.name}</div>
+                  <div className="cmp-detail">{row.detail}</div>
+                  {row.onMap && <span className="cmp-on-map">en el mapa</span>}
+                </td>
+                <td className="font-mono">{row.weights}</td>
+                {COMPARE_METRICS.map((metric) => {
+                  const stat = row.validation[metric.key] as PairedStat;
+                  const tone = !stat.significativo ? 'neutral' : stat.mejora ? 'good' : 'bad';
+                  const value = metric.absolute
+                    ? `${stat.diferencia >= 0 ? '+' : ''}${stat.diferencia.toFixed(metric.digits)}`
+                    : `${stat.diferencia_pct >= 0 ? '+' : ''}${stat.diferencia_pct.toFixed(metric.digits)}%`;
+                  return (
+                    <td key={metric.key} className={`font-mono tabular-nums cmp-cell tone-${tone}`}>
+                      {value}
+                      {best.get(metric.key) === row.key && <span className="cmp-best"> ★</span>}
+                    </td>
+                  );
+                })}
+                <td className="font-mono tabular-nums">{row.fleet}</td>
+                <td className="font-mono tabular-nums">{row.validation.utilidad.semillas}</td>
+                <td className="cmp-actions">
+                  {row.run ? (
+                    <>
+                      <button onClick={() => onShow(row.run as LabRun)} title="Ver este horario en el mapa comparativo">
+                        Mapa
+                      </button>
+                      <button onClick={() => onLoadParams((row.run as LabRun).params)} title="Cargar estos parámetros en la configuración">
+                        Reusar
+                      </button>
+                      <button className="danger" onClick={() => onRemove((row.run as LabRun).id)} title="Quitar del comparativo">
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={onShowOfficial} title="Mostrar el óptimo oficial en el mapa">
+                      Mapa
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="lab-footnote">
+        Porcentajes = cambio frente a la operación actual (U(S) en valor absoluto, más alto es mejor). Las pruebas se
+        conservan mientras la página esté abierta.
+      </p>
+    </section>
+  );
+};
+
 export const AgentLab: React.FC<{
   routes: RouteConfig[];
   onShowOnMap: (run: AgentRunPayload) => void;
-}> = ({ routes, onShowOnMap }) => {
+  onRestoreOptimum: () => void;
+  optimizedSource: OptimizedSource;
+  officialLog: AIOptimizationLog | null;
+}> = ({ routes, onShowOnMap, onRestoreOptimum, optimizedSource, officialLog }) => {
   const [scenario, setScenario] = useState<ScenarioInfo | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [algorithm, setAlgorithm] = useState<Algorithm>('recocido_simulado');
@@ -139,7 +323,11 @@ export const AgentLab: React.FC<{
   const [history, setHistory] = useState<AIOptimizationIteration[]>([]);
   const [result, setResult] = useState<AgentResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runs, setRuns] = useState<LabRun[]>([]);
   const sourceRef = useRef<EventSource | null>(null);
+  // Parameters of the run in progress, attached to its result when it arrives.
+  const pendingParamsRef = useRef<RunParams | null>(null);
+  const historyRef = useRef<AIOptimizationIteration[]>([]);
 
   useEffect(() => {
     fetch('/api/escenario')
@@ -159,6 +347,46 @@ export const AgentLab: React.FC<{
   const routeColor = useMemo(() => new Map(routes.map((r) => [r.id, r.color])), [routes]);
   const weightTotal = weights.espera + weights.sobrecupo + weights.varados + weights.flota;
 
+  const resetConfig = useCallback(() => {
+    setAlgorithm('recocido_simulado');
+    setBudget(60);
+    setSeeds(5);
+    setStep(0.5);
+    setSearchSeed(42);
+    if (scenario) {
+      setMaxFleet(scenario.flota_maxima);
+      setWeights(scenario.pesos_por_defecto);
+    }
+  }, [scenario]);
+
+  const loadParams = useCallback((params: RunParams) => {
+    setAlgorithm(params.algorithm);
+    setBudget(params.budget);
+    setSeeds(params.seeds);
+    setStep(params.step);
+    setSearchSeed(params.searchSeed);
+    setMaxFleet(params.maxFleet);
+    setWeights(params.weights);
+  }, []);
+
+  const showRun = useCallback(
+    (labRun: LabRun) => {
+      if (!scenario) return;
+      onShowOnMap({
+        replay: labRun.result.replay,
+        log: toLog(scenario, labRun.result, labRun.history, labRun.params.maxFleet ?? scenario.flota_maxima),
+        source: {
+          runId: labRun.id,
+          algorithm: ALGORITHM_LABELS[labRun.params.algorithm],
+          finishedAt: labRun.finishedAt,
+          deltaU: labRun.result.validacion.utilidad.diferencia,
+          validated: labRun.result.validacion.utilidad.significativo && labRun.result.validacion.utilidad.mejora,
+        },
+      });
+    },
+    [scenario, onShowOnMap],
+  );
+
   const stop = useCallback(() => {
     sourceRef.current?.close();
     sourceRef.current = null;
@@ -166,6 +394,8 @@ export const AgentLab: React.FC<{
   }, []);
 
   const run = useCallback(async () => {
+    pendingParamsRef.current = { algorithm, budget, seeds, step, searchSeed, maxFleet, weights };
+    historyRef.current = [];
     setHistory([]);
     setResult(null);
     setRunError(null);
@@ -193,10 +423,25 @@ export const AgentLab: React.FC<{
       sourceRef.current = source;
       source.addEventListener('iteracion', (event) => {
         const entry = JSON.parse((event as MessageEvent).data) as AIOptimizationIteration;
-        setHistory((previous) => [...previous, entry]);
+        historyRef.current = [...historyRef.current, entry];
+        setHistory(historyRef.current);
       });
       source.addEventListener('resultado', (event) => {
-        setResult(JSON.parse((event as MessageEvent).data) as AgentResult);
+        const finished = JSON.parse((event as MessageEvent).data) as AgentResult;
+        setResult(finished);
+        const params = pendingParamsRef.current;
+        if (params) {
+          setRuns((previous) => [
+            ...previous,
+            {
+              id: previous.length ? previous[previous.length - 1].id + 1 : 1,
+              finishedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+              params,
+              result: finished,
+              history: historyRef.current,
+            },
+          ]);
+        }
         setStatus('done');
         source.close();
       });
@@ -265,6 +510,20 @@ export const AgentLab: React.FC<{
           </p>
         </div>
       </header>
+
+      <div className={`lab-map-status ${optimizedSource.kind}`}>
+        <span>
+          <b>En el mapa comparativo:</b>{' '}
+          {optimizedSource.kind === 'agente'
+            ? 'horario óptimo oficial del agente (validado en 30 días simulados).'
+            : `prueba #${optimizedSource.runId ?? '?'} del laboratorio (${optimizedSource.algorithm}, ${optimizedSource.finishedAt}).`}
+        </span>
+        {optimizedSource.kind === 'laboratorio' && (
+          <button className="badge-restore-btn" onClick={onRestoreOptimum}>
+            Volver al óptimo del agente
+          </button>
+        )}
+      </div>
 
       <section className="lab-card lab-guide">
         <h4 className="lab-card-title">¿Qué hace este laboratorio?</h4>
@@ -408,6 +667,10 @@ export const AgentLab: React.FC<{
             </label>
           ))}
 
+          <button className="lab-reset-btn" onClick={resetConfig} disabled={status === 'running' || !scenario}>
+            <ArrowCounterClockwise size={13} weight="bold" /> Restablecer configuración inicial
+          </button>
+
           {status === 'running' ? (
             <button className="lab-run-btn stop" onClick={stop}>
               <Stop size={15} weight="fill" /> Detener visualización
@@ -525,19 +788,7 @@ export const AgentLab: React.FC<{
                 {result.evaluaciones} horarios evaluados · flota {result.inicial.fleet_used} → {result.mejor.fleet_used}
               </p>
             </div>
-            <button className="lab-run-btn secondary"
-              onClick={() =>
-                onShowOnMap({
-                  replay: result.replay,
-                  log: toLog(scenario, result, history, maxFleet ?? scenario.flota_maxima),
-                  source: {
-                    algorithm: ALGORITHM_LABELS[result.algoritmo as Algorithm] ?? result.algoritmo,
-                    finishedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-                    deltaU: result.validacion.utilidad.diferencia,
-                    validated: result.validacion.utilidad.significativo && result.validacion.utilidad.mejora,
-                  },
-                })
-              }>
+            <button className="lab-run-btn secondary" onClick={() => runs.length && showRun(runs[runs.length - 1])}>
               <MapTrifold size={15} weight="bold" /> Ver en el mapa comparativo
             </button>
           </div>
@@ -562,6 +813,20 @@ export const AgentLab: React.FC<{
             significancia). Gris: diferencia no significativa. «a/b»: semillas en las que el horario del agente es mejor.
           </p>
         </section>
+      )}
+
+      {(runs.length > 0 || officialLog?.holdout) && scenario && (
+        <RunComparison
+          runs={runs}
+          officialLog={officialLog}
+          defaultWeights={scenario.pesos_por_defecto}
+          activeRunId={optimizedSource.kind === 'laboratorio' ? optimizedSource.runId : undefined}
+          officialOnMap={optimizedSource.kind === 'agente'}
+          onShow={showRun}
+          onShowOfficial={onRestoreOptimum}
+          onLoadParams={loadParams}
+          onRemove={(id) => setRuns((previous) => previous.filter((r) => r.id !== id))}
+        />
       )}
     </div>
   );
