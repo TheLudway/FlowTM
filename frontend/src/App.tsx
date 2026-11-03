@@ -47,6 +47,7 @@ export const App: React.FC = () => {
     applyAgentRun,
     restoreOfficialOptimum,
     optimizedSource,
+    officialLog,
     simTimeSec,
     durationSec,
     isPlaying,
@@ -298,17 +299,7 @@ export const App: React.FC = () => {
               isSplitView={isSplitView}
             />
           </div>
-        ) : activeView === 'agent' ? (
-          /* Tab 3: Interactive Agent Lab (live search through the API) */
-          <AgentLab
-            routes={routes}
-            onShowOnMap={(run) => {
-              applyAgentRun(run);
-              setIsSplitView(true);
-              setActiveView('map');
-            }}
-          />
-        ) : (
+        ) : activeView === 'agent' ? null : (
           /* Tab 2: Dedicated Analytics Dashboard */
           <AnalyticsView
             isSplitView={isSplitView}
@@ -327,6 +318,20 @@ export const App: React.FC = () => {
             onRestoreOptimum={restoreOfficialOptimum}
           />
         )}
+        {/* Tab 3: Agent Lab stays mounted so runs and comparisons survive tab changes */}
+        <div className="agent-lab-host" hidden={activeView !== 'agent'}>
+          <AgentLab
+            routes={routes}
+            officialLog={officialLog}
+            optimizedSource={optimizedSource}
+            onRestoreOptimum={restoreOfficialOptimum}
+            onShowOnMap={(run) => {
+              applyAgentRun(run);
+              setIsSplitView(true);
+              setActiveView('map');
+            }}
+          />
+        </div>
       </main>
 
       {/* 3. Master Playback & Timeline Controls (Always shared across tabs) */}
