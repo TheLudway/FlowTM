@@ -25,22 +25,22 @@ print("=" * 80)
 print("SIMULACIÓN: ESCENARIO BASE OFICIAL (GTFS HORA PICO TRANSMILENIO)")
 print("=" * 80)
 
-# Reference: Official TransMilenio GTFS schedule for morning peak hour (06:00 - 09:00 AM)
-# Computed from data/processed/gtfs/gtfs_20260727 trip frequency analysis.
-base_headways: dict[str, float] = {
-    "B13": 2.0,  # Express Tunal -> Portal Norte (GTFS ~1.96 min)
-    "B18": 2.0,  # Express 20 de Julio -> Terminal (GTFS ~1.82 min)
-    "B23": 3.0,  # Express Eldorado -> Alcala (GTFS ~2.95 min)
-    "B27": 4.0,  # Express Tunal -> Portal Norte (GTFS ~3.91 min)
-    "B74": 4.0,  # Express Universidades -> Portal Norte (GTFS ~4.09 min)
-    "B75": 2.0,  # Express Usme -> Portal Norte (GTFS ~1.54 min)
-}
+simulator = CorridorSimulator(scenario_dir)
+# Current operation: mean AM-peak headways published in the GTFS.
+base_state = simulator.scenario.base_schedule()
 
-print(f"[INFO] Intervalos base de despacho (minutos): {base_headways}\n")
+print(f"[INFO] Intervalos GTFS de las rutas optimizables (min): {base_state.headways}")
+print(
+    f"[INFO] Servicios de fondo con frecuencia GTFS: "
+    f"{', '.join(simulator.scenario.background_routes)}"
+)
+print(
+    f"[INFO] Flota requerida: {base_state.total_fleet_used()} buses "
+    f"(cota B_max = {base_state.max_fleet})\n"
+)
 print("[INFO] Ejecutando simulación de 3 horas de hora pico (06:00 - 09:00 AM)...")
 
-simulator = CorridorSimulator(scenario_dir)
-results = simulator.simulate(base_headways, duration_hours=3.0)
+results = simulator.simulate(base_state.headways)
 
 print("\n" + "=" * 80)
 print("RESULTADOS: ESCENARIO BASE (REFERENCIA OFICIAL TRANSMILENIO)")
@@ -54,7 +54,8 @@ print(
 )
 print(f"[INFO] Pasajeros transportados     : {results.total_transported_passengers:,}")
 print(f"[INFO] Pasajeros varados en andén  : {results.stranded_passengers_in_queue:,}")
-print(f"[INFO] Despachos totales          : {results.total_dispatched_buses}")
+print(f"[INFO] Despachos totales           : {results.total_dispatched_buses}")
+print(f"[INFO] Retraso medio de despacho   : {results.avg_dispatch_delay_min:.2f} min")
 print("=" * 80)
 
 # Export telemetry for OCC Dashboard and visualization layers

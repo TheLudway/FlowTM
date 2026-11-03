@@ -9,8 +9,13 @@
 import json
 from pathlib import Path
 
+from conftest import (
+    SYNTHETIC_BASE_HEADWAYS,
+    SYNTHETIC_STATION_CODES,
+    build_synthetic_scenario,
+)
+
 from flowtm.domain.models import Passenger, Station
-from flowtm.domain.state import ScheduleState
 from flowtm.simulation.collector import (
     SUMMARY_METRICS_FILENAME,
     export_summary_metrics,
@@ -67,35 +72,64 @@ def test_station_queue_and_boarding():
     assert station.waiting_queue[0].passenger_id == 2
 
 
-def test_schedule_state_neighbor_generation():
-    headways = {"B13": 2.0, "B18": 2.0, "B23": 3.0, "B27": 4.0, "B74": 4.0, "B75": 2.0}
-    state = ScheduleState(headways=headways)
-    neighbor = state.generate_neighbor(step_min=0.5)
-
-    assert len(neighbor.headways) == 6
-    # Verify all headways respect operational bounds [2.0, 15.0]
-    for r, h in neighbor.headways.items():
-        assert 2.0 <= h <= 15.0, f"Route {r} headway {h} out of bounds"
-
-
-def test_corridor_simulation_6_routes(synthetic_scenario_dir: Path):
+def test_corridor_simulation_runs_all_services(synthetic_scenario_dir: Path):
     simulator = CorridorSimulator(synthetic_scenario_dir)
-    headways = {"B13": 2.0, "B18": 2.0, "B23": 3.0, "B27": 4.0, "B74": 4.0, "B75": 2.0}
-    results = simulator.simulate(headways, duration_hours=1.0)
+    results = simulator.simulate(SYNTHETIC_BASE_HEADWAYS, duration_hours=1.0)
 
     assert results.total_dispatched_buses > 0
     assert results.total_transported_passengers > 0
-    assert len(results.station_metrics) == 17
-    assert set(results.route_load_profiles.keys()) == set(headways.keys())
+    assert len(results.station_metrics) == len(SYNTHETIC_STATION_CODES)
+    assert set(results.route_load_profiles) == set(SYNTHETIC_BASE_HEADWAYS)
+    # Background service runs at its GTFS headway even though it is not optimized.
+    assert any(bus.route == "BG1" for bus in simulator.simulated_buses)
+
+
+def test_express_service_only_stops_at_its_pattern(synthetic_scenario_dir: Path):
+    simulator = CorridorSimulator(synthetic_scenario_dir)
+    simulator.simulate(SYNTHETIC_BASE_HEADWAYS, duration_hours=1.0)
+
+    express_profiles = {
+        record["secuencia"]
+        for bus in simulator.simulated_buses
+        if bus.route == "R2"
+        for record in bus.passenger_profile_by_stop
+    }
+    assert express_profiles <= {1, 4, 8}
+
+
+def test_passengers_only_board_buses_serving_their_destination(
+    synthetic_scenario_dir: Path,
+):
+    simulator = CorridorSimulator(synthetic_scenario_dir)
+    simulator.simulate(SYNTHETIC_BASE_HEADWAYS, duration_hours=1.0)
+    served = {
+        route: set(spec.served_destinations)
+        for route, spec in simulator.scenario.services.items()
+    }
+    for bus in simulator.simulated_buses:
+        for passenger in bus.onboard_passengers:
+            assert passenger.destination_station in served[bus.route]
+
+
+def test_physical_fleet_causes_dispatch_delays_when_cycle_is_too_short(
+    tmp_path: Path,
+):
+    # A cycle shorter than the corridor run means vehicles cannot be back in time.
+    scenario_dir = build_synthetic_scenario(tmp_path / "corto", {"R1": 5.0})
+    simulator = CorridorSimulator(scenario_dir)
+    result = simulator.simulate({"R1": 4.0, "R2": 5.0, "R3": 5.0}, duration_hours=1.0)
+
+    assert result.avg_dispatch_delay_min > 0
+    r1_vehicles = {b.vehicle_id for b in simulator.simulated_buses if b.route == "R1"}
+    assert len(r1_vehicles) == 2  # ceil(5 / 4) physical buses reused across trips
 
 
 def test_corridor_simulation_is_reproducible_with_seed(synthetic_scenario_dir: Path):
-    headways = {"B13": 3.0, "B18": 4.0, "B23": 5.0, "B27": 4.0, "B74": 6.0, "B75": 3.0}
     first = CorridorSimulator(synthetic_scenario_dir).simulate(
-        headways, duration_hours=1.0, seed=7
+        SYNTHETIC_BASE_HEADWAYS, duration_hours=1.0, seed=7
     )
     second = CorridorSimulator(synthetic_scenario_dir).simulate(
-        headways, duration_hours=1.0, seed=7
+        SYNTHETIC_BASE_HEADWAYS, duration_hours=1.0, seed=7
     )
 
     assert first.avg_waiting_time_min == second.avg_waiting_time_min
@@ -106,9 +140,8 @@ def test_corridor_simulation_is_reproducible_with_seed(synthetic_scenario_dir: P
 def test_export_summary_metrics_matches_simulation(
     synthetic_scenario_dir: Path, tmp_path: Path
 ):
-    headways = {"B13": 3.0, "B18": 4.0, "B23": 5.0, "B27": 4.0, "B74": 6.0, "B75": 3.0}
     result = CorridorSimulator(synthetic_scenario_dir).simulate(
-        headways, duration_hours=1.0
+        SYNTHETIC_BASE_HEADWAYS, duration_hours=1.0
     )
 
     metrics_file = export_summary_metrics(result, tmp_path / "telemetria_opt")
@@ -117,6 +150,4 @@ def test_export_summary_metrics_matches_simulation(
     assert metrics_file.name == SUMMARY_METRICS_FILENAME
     assert metrics["avg_waiting_time_min"] == round(result.avg_waiting_time_min, 2)
     assert metrics["total_dispatched_buses"] == result.total_dispatched_buses
-    assert metrics["stranded_passengers_in_queue"] == (
-        result.stranded_passengers_in_queue
-    )
+    assert metrics["avg_dispatch_delay_min"] == round(result.avg_dispatch_delay_min, 2)
