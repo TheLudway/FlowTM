@@ -23,6 +23,8 @@ from pathlib import Path
 
 import polars as pl
 
+from flowtm.simulation.collector import SUMMARY_METRICS_FILENAME
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCENARIO_DIR = ROOT_DIR / "data/scenarios/piloto"
 INFRA_DIR = ROOT_DIR / "data/infra_troncal"
@@ -316,46 +318,26 @@ def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
         f"[INFO] {len(queue_timeline)} instantes de colas exportados a {queues_filename}"
     )
 
-    # Summary
-    avg_occ = float(df_buses["occupancy_pct"].mean())
+    # Summary: KPIs come from the simulator run (metricas_resumen.json written by
+    # scripts 02/03), never from hardcoded fallbacks.
     max_queue = int(df_colas["queue_size"].max())
-    overcrowded_rate = (
-        float(
-            (
-                df_buses.filter(pl.col("occupancy_pct") >= 90.0).height
-                / max(1, df_buses.height)
-            )
-            * 100
+    metrics_path = telemetry_dir / SUMMARY_METRICS_FILENAME
+    if not metrics_path.exists():
+        raise SystemExit(
+            f"[ERROR] Falta {metrics_path}. Ejecute "
+            "scripts/02_correr_simulador_base.py y scripts/03_optimizar_frecuencias.py "
+            "antes de exportar."
         )
-        if df_buses.height > 0
-        else 0.0
-    )
-
-    metricas_path = telemetry_dir / "metricas_resumen.json"
-    if metricas_path.exists():
-        with open(metricas_path, encoding="utf-8") as f:
-            m = json.load(f)
-        avg_wait = m.get("avg_waiting_time_min", 3.67)
-        corridor_occ = m.get("avg_occupancy_pct", round(avg_occ, 1))
-        corridor_overcrowd = m.get("overcrowded_buses_pct", round(overcrowded_rate, 1))
-        total_served = m.get("total_passengers_served", 48899)
-        total_dispatched = m.get("total_dispatched_buses", len(bus_list))
-        stranded = m.get("stranded_passengers_in_queue", 1273)
-    else:
-        avg_wait = 3.67 if suffix == "" else 3.48
-        corridor_occ = round(avg_occ, 1)
-        corridor_overcrowd = round(overcrowded_rate, 1)
-        total_served = 48899 if suffix == "" else 48849
-        total_dispatched = len(bus_list)
-        stranded = 1273 if suffix == "" else 1323
+    with open(metrics_path, encoding="utf-8") as f:
+        run_metrics = json.load(f)
 
     summary = {
-        "total_dispatched_buses": total_dispatched,
-        "total_passengers_served": total_served,
-        "avg_waiting_time_min": avg_wait,
-        "avg_occupancy_pct": corridor_occ,
-        "overcrowded_buses_pct": corridor_overcrowd,
-        "stranded_passengers_in_queue": stranded,
+        "total_dispatched_buses": run_metrics["total_dispatched_buses"],
+        "total_passengers_served": run_metrics["total_passengers_served"],
+        "avg_waiting_time_min": run_metrics["avg_waiting_time_min"],
+        "avg_occupancy_pct": run_metrics["avg_occupancy_pct"],
+        "overcrowded_buses_pct": run_metrics["overcrowded_buses_pct"],
+        "stranded_passengers_in_queue": run_metrics["stranded_passengers_in_queue"],
         "max_queue_station": max_queue,
         "active_routes": len(ROUTES_CONFIG),
         "total_stations": len(stations),

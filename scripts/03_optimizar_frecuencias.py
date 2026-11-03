@@ -25,6 +25,7 @@ from flowtm.domain.state import ScheduleState
 from flowtm.infrastructure.gtfs_exporter import export_gtfs_frequencies
 from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
 from flowtm.optimization.utility import UtilityCalculator
+from flowtm.simulation.collector import export_summary_metrics
 from flowtm.simulation.engine import CorridorSimulator
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -78,6 +79,7 @@ print("\n[INFO] Exportando telemetría del escenario optimizado...")
 opt_simulator = CorridorSimulator(scenario_dir)
 opt_results = opt_simulator.simulate(best_state.headways)
 opt_simulator.collector.export_telemetry(opt_telemetry_dir)
+export_summary_metrics(opt_results, opt_telemetry_dir)
 print(f"[INFO] Telemetría optimizada guardada en: {opt_telemetry_dir}")
 
 # 4. Export GTFS frequencies.txt (Official PEAS Actuator)

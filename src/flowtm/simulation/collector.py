@@ -13,9 +13,35 @@ Observer Pattern: Real-time telemetry collector for vehicle spatio-temporal posi
 passenger queues, and platform metrics across the BRT corridor.
 """
 
+import json
 from pathlib import Path
 
 import polars as pl
+
+from flowtm.domain.models import SimulationResult
+
+SUMMARY_METRICS_FILENAME = "metricas_resumen.json"
+
+
+def build_summary_metrics(result: SimulationResult) -> dict[str, float | int]:
+    """Aggregate KPIs of a simulation run in the format consumed by the OCC."""
+    return {
+        "avg_waiting_time_min": round(result.avg_waiting_time_min, 2),
+        "avg_occupancy_pct": round(result.avg_occupancy_rate * 100, 1),
+        "overcrowded_buses_pct": round(result.overcrowded_bus_pct, 1),
+        "total_passengers_served": int(result.total_transported_passengers),
+        "stranded_passengers_in_queue": int(result.stranded_passengers_in_queue),
+        "total_dispatched_buses": int(result.total_dispatched_buses),
+    }
+
+
+def export_summary_metrics(result: SimulationResult, output_path: Path) -> Path:
+    """Write ``metricas_resumen.json`` next to the scenario telemetry."""
+    output_path.mkdir(parents=True, exist_ok=True)
+    metrics_file = output_path / SUMMARY_METRICS_FILENAME
+    with open(metrics_file, "w", encoding="utf-8") as handle:
+        json.dump(build_summary_metrics(result), handle, indent=2)
+    return metrics_file
 
 
 class SimulationCollector:
