@@ -23,7 +23,22 @@ from flowtm.domain.models import SimulationResult
 SUMMARY_METRICS_FILENAME = "metricas_resumen.json"
 
 
-def build_summary_metrics(result: SimulationResult) -> dict[str, float | int]:
+def top_od_pairs(result: SimulationResult, limit: int = 8) -> list[dict]:
+    """Most frequent simulated origin-destination pairs with their share."""
+    total = sum(result.od_counts.values())
+    ranked = sorted(result.od_counts.items(), key=lambda item: item[1], reverse=True)
+    return [
+        {
+            "origin": origin,
+            "destination": destination,
+            "passengers": count,
+            "share_pct": round(count / total * 100, 1) if total else 0.0,
+        }
+        for (origin, destination), count in ranked[:limit]
+    ]
+
+
+def build_summary_metrics(result: SimulationResult) -> dict[str, object]:
     """Aggregate KPIs of a simulation run in the format consumed by the OCC."""
     return {
         "avg_waiting_time_min": round(result.avg_waiting_time_min, 2),
@@ -32,6 +47,8 @@ def build_summary_metrics(result: SimulationResult) -> dict[str, float | int]:
         "total_passengers_served": int(result.total_transported_passengers),
         "stranded_passengers_in_queue": int(result.stranded_passengers_in_queue),
         "total_dispatched_buses": int(result.total_dispatched_buses),
+        "avg_dispatch_delay_min": round(result.avg_dispatch_delay_min, 2),
+        "od_top": top_od_pairs(result),
     }
 
 
@@ -46,12 +63,17 @@ def export_summary_metrics(result: SimulationResult, output_path: Path) -> Path:
 
 class SimulationCollector:
     """
-    Collects discrete-event simulation records for historical export and OCC visualization.
+    Observer that records discrete-event telemetry for export and OCC visualization.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, start_hour: int = 6) -> None:
+        self.start_hour = start_hour
         self.bus_telemetry: list[dict] = []
         self.queue_history: list[dict] = []
+
+    def _clock(self, time_sec: float) -> str:
+        total = int(self.start_hour * 3600 + time_sec)
+        return f"{total // 3600:02d}:{(total % 3600) // 60:02d}:{total % 60:02d}"
 
     def record_bus_position(
         self,
@@ -62,27 +84,19 @@ class SimulationCollector:
         lon: float,
         occupancy: float,
         passengers: int,
+        vehicle_id: str = "",
     ) -> None:
-        """Records an instantaneous snapshot of a vehicle traversing a station or link."""
-        simulated_hour = int(6 + time_sec // 3600)
-        simulated_minute = int((time_sec % 3600) // 60)
-        simulated_second = int(time_sec % 60)
-
+        """Records an instantaneous snapshot of a vehicle at a station."""
         self.bus_telemetry.append(
             {
-                "tiempo_seg": round(time_sec, 1),
                 "time_sec": round(time_sec, 1),
-                "hora_simulada": f"{simulated_hour:02d}:{simulated_minute:02d}",
-                "simulated_time": f"{simulated_hour:02d}:{simulated_minute:02d}:{simulated_second:02d}",
-                "id_bus": bus_id,
+                "simulated_time": self._clock(time_sec),
                 "bus_id": bus_id,
-                "ruta": route,
+                "vehicle_id": vehicle_id,
                 "route": route,
                 "lat": lat,
                 "lon": lon,
-                "ocupacion": round(occupancy * 100, 1),
                 "occupancy_pct": round(occupancy * 100, 1),
-                "pasajeros": passengers,
                 "passengers": passengers,
             }
         )
@@ -97,13 +111,9 @@ class SimulationCollector:
         """Records the passenger queue length Q(t) standing at a platform."""
         self.queue_history.append(
             {
-                "tiempo_seg": round(time_sec, 1),
                 "time_sec": round(time_sec, 1),
-                "codigo_estacion": station_code,
                 "station_code": station_code,
-                "nombre": station_name,
                 "station_name": station_name,
-                "cola_pasajeros": queue_size,
                 "queue_size": queue_size,
             }
         )
@@ -112,8 +122,10 @@ class SimulationCollector:
         """Exports collected telemetry to Parquet files for OCC consumption."""
         output_path.mkdir(parents=True, exist_ok=True)
         if self.bus_telemetry:
-            df_buses = pl.DataFrame(self.bus_telemetry)
-            df_buses.write_parquet(output_path / "telemetria_buses.parquet")
+            pl.DataFrame(self.bus_telemetry).write_parquet(
+                output_path / "telemetria_buses.parquet"
+            )
         if self.queue_history:
-            df_queues = pl.DataFrame(self.queue_history)
-            df_queues.write_parquet(output_path / "historial_colas.parquet")
+            pl.DataFrame(self.queue_history).write_parquet(
+                output_path / "historial_colas.parquet"
+            )

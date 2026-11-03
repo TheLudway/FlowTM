@@ -9,12 +9,24 @@
 """
 flowtm.simulation.engine
 ========================
-High-fidelity Discrete Event Simulation (DES) Engine implemented on SimPy.
-Simulates non-homogeneous Poisson passenger arrivals, dynamic non-linear dwell times,
-and simultaneous multi-route vehicle dispatches along the Caracas-Autonorte BRT corridor.
+Discrete Event Simulation (DES) of the southbound corridor on SimPy.
+
+* Demand: non-homogeneous Poisson arrivals lambda(s, t) per station and 15-minute
+  window, with destinations drawn from observed AM exits (gravity weights).
+* Supply: every trunk service published in the GTFS for the corridor, with its
+  real stop pattern. Optimizable routes run the headways under evaluation;
+  background routes run their GTFS headway.
+* Physical fleet: each optimizable route owns the vehicles given by the fleet
+  rule of ``ScheduleState`` (both legs, Little's law). A vehicle is back at the
+  terminal after its GTFS peak cycle (outbound + return + layovers); when none
+  is available the dispatch is delayed, so fleet shortages emerge in the KPIs.
+* Platforms: each station has as many docking bays as stopping positions
+  (official wagon count / GTFS platforms); full bays make buses queue (bunching).
 """
 
+import math
 import random
+from collections import Counter
 from pathlib import Path
 
 import polars as pl
@@ -23,288 +35,110 @@ import simpy
 from flowtm.domain.models import Bus, Passenger, SimulationResult, Station
 from flowtm.simulation.collector import SimulationCollector
 from flowtm.simulation.dwell_time import calculate_dwell_time_sec
+from flowtm.simulation.scenario import SOUTH_SINK_CODE, CorridorScenario, ServiceSpec
 
-# Canonical stop mapping for the 6 official trunk routes along the pilot corridor
-# Stations ordered from North (Portal Norte 02000) to South (Calle 45 09117)
-OFFICIAL_ROUTE_STOPS: dict[str, list[str]] = {
-    # B13: High-frequency trunk spine connecting Portal Norte through Autonorte & Caracas to Calle 45
-    "B13": [
-        "02000",
-        "02101",
-        "02102",
-        "02103",
-        "02104",
-        "02200",
-        "02205",
-        "02300",
-        "02303",
-        "09127",
-        "09120",
-        "09117",
-    ],
-    # B18: Express connecting Portal Norte to 20 de Julio via major transfer hubs and Caracas
-    "B18": [
-        "02000",
-        "02101",
-        "02200",
-        "02204",
-        "02300",
-        "02302",
-        "02304",
-        "09122",
-        "09127",
-    ],
-    # B23: Express connecting Portal Norte / Alcala to Eldorado via Prado, Pepe Sierra and Caracas
-    "B23": [
-        "02000",
-        "02103",
-        "02200",
-        "02201",
-        "02204",
-        "02300",
-        "02303",
-        "09122",
-        "09117",
-    ],
-    # B27: Heavy-spine high capacity trunk connecting Tunal through key hubs to Calle 45
-    "B27": [
-        "02000",
-        "02101",
-        "02104",
-        "02200",
-        "02300",
-        "02302",
-        "02304",
-        "09122",
-        "09117",
-    ],
-    # B74: High-capacity express connecting Universidades to Portal Norte
-    "B74": [
-        "02000",
-        "02101",
-        "02103",
-        "02104",
-        "02201",
-        "02300",
-        "02302",
-        "02304",
-        "09122",
-        "09117",
-    ],
-    # B75: High-frequency trunk express serving Usme corridor via Caracas hubs
-    "B75": [
-        "02000",
-        "02101",
-        "02104",
-        "02200",
-        "02201",
-        "02300",
-        "02304",
-        "09122",
-        "09127",
-        "09120",
-        "09117",
-    ],
-}
+DEMAND_WINDOW_SEC = 900.0
+QUEUE_SAMPLE_SEC = 60.0
+OVERCROWDED_LOAD_FACTOR = 0.95
 
 
 class CorridorSimulator:
-    """
-    Simulates dynamic passenger and fleet operations along the BRT trunk corridor.
-    """
+    """Simulates passenger and fleet operations along the BRT corridor."""
 
     def __init__(self, scenario_dir: Path) -> None:
-        self.scenario_dir = Path(scenario_dir)
-        self.df_topology = pl.read_parquet(
-            self.scenario_dir / "estaciones_piloto.parquet"
-        )
-        self.ordered_station_codes: list[str] = self.df_topology.sort("secuencia")[
-            "codigo"
-        ].to_list()
-
-        # Full day arrival rate demand profile
-        self.df_demand_full = pl.read_parquet(
-            self.scenario_dir / "demanda_lambda_dia_completo.parquet"
-        )
-
-        # Empirical destination attraction weights calibrated from tap-out telemetry
-        df_alightings = pl.read_parquet(self.scenario_dir / "pesos_descenso.parquet")
-        self.attraction_weights: dict[str, float] = dict(
-            zip(
-                df_alightings["CODIGO_ESTACION"],
-                df_alightings["peso_atraccion"],
-                strict=True,
-            )
-        )
-
+        self.scenario = CorridorScenario.load(Path(scenario_dir))
+        self.df_topology = self.scenario.topology
+        self.ordered_station_codes: list[str] = self.df_topology["codigo"].to_list()
+        self.station_position = {
+            code: index for index, code in enumerate(self.ordered_station_codes)
+        }
         self.collector = SimulationCollector()
-        self.passenger_id_counter = 1
         self.stations: dict[str, Station] = {}
+        self.bays: dict[str, simpy.Resource] = {}
         self.simulated_buses: list[Bus] = []
+        self.dispatch_delays_sec: list[float] = []
+        self.passenger_id_counter = 1
+        self.passengers_exited_south = 0
+        self.od_counts: Counter[tuple[str, str]] = Counter()
 
+    # ------------------------------------------------------------------ setup
     def reset_environment(
         self, env: simpy.Environment, start_hour: int, end_hour: int
     ) -> None:
-        """Initializes simulation entities, platform resources, and demand windows."""
-        self.df_demand_window = self.df_demand_full.filter(
+        """Initializes stations, docking bays and the demand windows."""
+        demand = self.scenario.demand.filter(
             (pl.col("hora_del_dia") >= start_hour) & (pl.col("hora_del_dia") < end_hour)
         )
-        self.window_intervals = (
-            self.df_demand_window["franja_15m"].unique().sort().to_list()
-        )
+        self.window_intervals = demand["franja_15m"].unique().sort().to_list()
+        self.rates_by_window = {
+            window: dict(
+                zip(group["CODIGO_ESTACION"], group["lambda_segundo"], strict=True)
+            )
+            for (window,), group in demand.group_by(["franja_15m"])
+        }
 
         self.stations = {}
-        for r in self.df_topology.iter_rows(named=True):
-            station = Station(
-                station_code=r["codigo"],
-                name=r["nombre"],
-                sequence=r["secuencia"],
-                lat=r["lat"],
-                lon=r["lon"],
-                next_distance_m=r["distancia_siguiente_m"],
-                travel_time_sec=r["tiempo_viaje_seg"],
+        self.bays = {}
+        for row in self.df_topology.iter_rows(named=True):
+            self.stations[row["codigo"]] = Station(
+                station_code=row["codigo"],
+                name=row["nombre"],
+                sequence=row["secuencia"],
+                lat=row["lat"],
+                lon=row["lon"],
+                next_distance_m=row["distancia_siguiente_m"],
+                travel_time_sec=row["tiempo_viaje_seg"],
             )
-            # Physical platform docking bay capacity (2 articulated vehicles simultaneously)
-            station.bay_resource = simpy.Resource(env, capacity=2)
-            self.stations[r["codigo"]] = station
+            self.bays[row["codigo"]] = simpy.Resource(env, capacity=int(row["bahias"]))
 
-        self.collector = SimulationCollector()
-        self.passenger_id_counter = 1
+        self.collector = SimulationCollector(start_hour=start_hour)
         self.simulated_buses = []
+        self.dispatch_delays_sec = []
+        self.passenger_id_counter = 1
+        self.passengers_exited_south = 0
+        self.od_counts = Counter()
 
+    # ---------------------------------------------------------------- demand
     def demand_updater_process(self, env: simpy.Environment):
-        """Periodically updates Poisson arrival rates lambda(s, t) every 15 minutes."""
-        interval_idx = 0
-        while True:
-            if interval_idx < len(self.window_intervals):
-                current_interval = self.window_intervals[interval_idx]
-                df_interval = self.df_demand_window.filter(
-                    pl.col("franja_15m") == current_interval
-                )
-                for row in df_interval.iter_rows(named=True):
-                    code = row["CODIGO_ESTACION"]
-                    if code in self.stations:
-                        self.stations[code].current_arrival_rate = row["lambda_segundo"]
-                interval_idx += 1
-            yield env.timeout(900.0)
+        """Updates the Poisson rates lambda(s, t) at every 15-minute window."""
+        for window in self.window_intervals:
+            rates = self.rates_by_window.get(window, {})
+            for code, station in self.stations.items():
+                station.current_arrival_rate = float(rates.get(code, 0.0))
+            yield env.timeout(DEMAND_WINDOW_SEC)
+        for station in self.stations.values():
+            station.current_arrival_rate = 0.0
 
     def passenger_arrival_process(
         self, env: simpy.Environment, station: Station, rng: random.Random
     ):
-        """Simulates stochastic passenger arrivals via Non-Homogeneous Poisson Process (NHPP)."""
-        downstream_destinations = [
-            code
-            for code in self.ordered_station_codes
-            if self.stations[code].sequence > station.sequence
+        """Non-homogeneous Poisson arrivals with gravity-based destinations."""
+        position = self.station_position[station.station_code]
+        destinations = [*self.ordered_station_codes[position + 1 :], SOUTH_SINK_CODE]
+        weights = [
+            self.scenario.attraction_weights.get(code, 0.0) for code in destinations
         ]
-        if not downstream_destinations:
+        if sum(weights) <= 0:
             return
 
-        destination_weights = [
-            self.attraction_weights.get(code, 0.05) for code in downstream_destinations
-        ]
-
         while True:
-            rate = max(0.005, station.current_arrival_rate)
-            delta_t = rng.expovariate(rate)
-            yield env.timeout(delta_t)
-
-            selected_destination = rng.choices(
-                downstream_destinations, weights=destination_weights, k=1
-            )[0]
+            rate = station.current_arrival_rate
+            if rate <= 0:
+                # No observed demand in this window: wait for the next update.
+                yield env.timeout(DEMAND_WINDOW_SEC - env.now % DEMAND_WINDOW_SEC)
+                continue
+            yield env.timeout(rng.expovariate(rate))
             passenger = Passenger(
                 passenger_id=self.passenger_id_counter,
                 origin_station=station.station_code,
-                destination_station=selected_destination,
+                destination_station=rng.choices(destinations, weights=weights, k=1)[0],
                 arrival_time_sec=env.now,
             )
             self.passenger_id_counter += 1
             station.register_arrival(passenger)
-            station.cumulative_waiting_time_sec += len(station.waiting_queue) * delta_t
-
-    def bus_trip_process(self, env: simpy.Environment, bus: Bus, rng: random.Random):
-        """Models the physical trip of a vehicle traversing the corridor stations."""
-        for code in self.ordered_station_codes:
-            station = self.stations[code]
-
-            # If skip-stop express service, bypass platform dwell time
-            if code not in bus.scheduled_stops:
-                self.collector.record_bus_position(
-                    time_sec=env.now,
-                    bus_id=bus.bus_id,
-                    route=bus.route,
-                    lat=station.lat,
-                    lon=station.lon,
-                    occupancy=bus.occupancy_rate,
-                    passengers=bus.total_passengers,
-                )
-                yield env.timeout(station.travel_time_sec)
-                continue
-
-            with station.bay_resource.request() as bay_request:
-                yield bay_request
-
-                # Telemetry record 1: Platform Arrival (doors open, arriving load on board)
-                # Bus arrives carrying the exact passengers that traveled from the previous station
-                self.collector.record_bus_position(
-                    time_sec=env.now,
-                    bus_id=bus.bus_id,
-                    route=bus.route,
-                    lat=station.lat,
-                    lon=station.lon,
-                    occupancy=bus.occupancy_rate,
-                    passengers=bus.total_passengers,
-                )
-
-                # 1. Alighting passengers
-                alighting_passengers = [
-                    p for p in bus.onboard_passengers if p.destination_station == code
-                ]
-                bus.onboard_passengers = [
-                    p for p in bus.onboard_passengers if p.destination_station != code
-                ]
-                alighting_count = len(alighting_passengers)
-                station.total_alightings += alighting_count
-
-                # 2. Boarding passengers
-                available_capacity = bus.available_capacity
-                boarding_passengers = station.board_passengers(
-                    bus.scheduled_stops, available_capacity
-                )
-                for p in boarding_passengers:
-                    p.boarding_time_sec = env.now
-                bus.onboard_passengers.extend(boarding_passengers)
-                boarding_count = len(boarding_passengers)
-
-                # Record load profile (post-exchange departing load for this stop)
-                bus.occupancy_history.append(bus.occupancy_rate)
-                bus.passenger_profile_by_stop.append(
-                    {
-                        "estacion": station.name,
-                        "secuencia": station.sequence,
-                        "suben": boarding_count,
-                        "bajan": alighting_count,
-                        "a_bordo": bus.total_passengers,
-                        "ocupacion_pct": round(bus.occupancy_rate * 100, 1),
-                    }
-                )
-
-                # 3. Dynamic dwell time (seconds stopped at station bay)
-                dwell_sec = calculate_dwell_time_sec(boarding_count, alighting_count)
-                yield env.timeout(dwell_sec)
-
-                # Telemetry record 2: Platform Departure (doors closed, post-exchange load on board)
-                self.collector.record_bus_position(
-                    time_sec=env.now,
-                    bus_id=bus.bus_id,
-                    route=bus.route,
-                    lat=station.lat,
-                    lon=station.lon,
-                    occupancy=bus.occupancy_rate,
-                    passengers=bus.total_passengers,
-                )
-
-            yield env.timeout(station.travel_time_sec)
+            self.od_counts[
+                (passenger.origin_station, passenger.destination_station)
+            ] += 1
 
     def queue_monitor_process(self, env: simpy.Environment):
         """Samples platform queue lengths Q(t) every 60 seconds."""
@@ -316,40 +150,157 @@ class CorridorSimulator:
                     station_name=station.name,
                     queue_size=len(station.waiting_queue),
                 )
-            yield env.timeout(60.0)
+            yield env.timeout(QUEUE_SAMPLE_SEC)
+
+    # ---------------------------------------------------------------- supply
+    def _record_position(
+        self, env: simpy.Environment, bus: Bus, station: Station
+    ) -> None:
+        self.collector.record_bus_position(
+            time_sec=env.now,
+            bus_id=bus.bus_id,
+            route=bus.route,
+            lat=station.lat,
+            lon=station.lon,
+            occupancy=bus.occupancy_rate,
+            passengers=bus.total_passengers,
+            vehicle_id=bus.vehicle_id,
+        )
+
+    def bus_trip_process(self, env: simpy.Environment, bus: Bus, service: ServiceSpec):
+        """Physical trip from the service's first to last corridor stop."""
+        first = self.station_position[service.stops[0]]
+        last = self.station_position[service.stops[-1]]
+        stops = set(service.stops)
+        served = service.served_destinations
+
+        for position in range(first, last + 1):
+            code = self.ordered_station_codes[position]
+            station = self.stations[code]
+
+            if code in stops:
+                with self.bays[code].request() as bay:
+                    yield bay
+                    self._record_position(env, bus, station)
+
+                    alighting = [
+                        p
+                        for p in bus.onboard_passengers
+                        if p.destination_station == code
+                    ]
+                    bus.onboard_passengers = [
+                        p
+                        for p in bus.onboard_passengers
+                        if p.destination_station != code
+                    ]
+                    station.total_alightings += len(alighting)
+
+                    boarding = station.board_passengers(served, bus.available_capacity)
+                    for passenger in boarding:
+                        passenger.boarding_time_sec = env.now
+                        station.cumulative_waiting_time_sec += (
+                            env.now - passenger.arrival_time_sec
+                        )
+                    bus.onboard_passengers.extend(boarding)
+
+                    bus.occupancy_history.append(bus.occupancy_rate)
+                    bus.passenger_profile_by_stop.append(
+                        {
+                            "estacion": station.name,
+                            "secuencia": station.sequence,
+                            "suben": len(boarding),
+                            "bajan": len(alighting),
+                            "a_bordo": bus.total_passengers,
+                            "ocupacion_pct": round(bus.occupancy_rate * 100, 1),
+                        }
+                    )
+                    yield env.timeout(
+                        calculate_dwell_time_sec(len(boarding), len(alighting))
+                    )
+                    self._record_position(env, bus, station)
+            else:
+                self._record_position(env, bus, station)
+
+            if position < last:
+                yield env.timeout(station.travel_time_sec)
+
+        # Remaining passengers continue beyond the corridor (south sink).
+        self.passengers_exited_south += bus.total_passengers
+        bus.onboard_passengers = []
+
+    def _return_vehicle(
+        self,
+        env: simpy.Environment,
+        pool: simpy.Store,
+        vehicle_id: str,
+        delay_sec: float,
+    ):
+        yield env.timeout(max(0.0, delay_sec))
+        yield pool.put(vehicle_id)
+
+    def _run_trip(
+        self,
+        env: simpy.Environment,
+        bus: Bus,
+        service: ServiceSpec,
+        pool: simpy.Store | None,
+    ):
+        departure = env.now
+        yield env.process(self.bus_trip_process(env, bus, service))
+        if pool is not None:
+            corridor_time = env.now - departure
+            env.process(
+                self._return_vehicle(
+                    env,
+                    pool,
+                    bus.vehicle_id,
+                    service.cycle_time_min * 60.0 - corridor_time,
+                )
+            )
 
     def dispatch_loop(
         self,
         env: simpy.Environment,
-        route: str,
+        service: ServiceSpec,
         headway_min: float,
-        base_id: int,
+        fleet_size: int | None,
         rng: random.Random,
     ):
-        """Continuously dispatches buses at the prescribed headway interval."""
-        id_counter = base_id
-        interval_sec = headway_min * 60.0
+        """
+        Dispatches trips every ``headway_min``. With a fleet pool, a trip waits for
+        a free vehicle; the delay is recorded and the timetable is not shifted.
+        """
+        interval = headway_min * 60.0
+        first_departure = rng.uniform(0.0, interval)
+        pool: simpy.Store | None = None
+        if fleet_size is not None:
+            pool = simpy.Store(env)
+            for index in range(fleet_size):
+                pool.items.append(f"{service.route}-V{index + 1:03d}")
 
-        scheduled_stops = OFFICIAL_ROUTE_STOPS.get(route, self.ordered_station_codes)
-        # Ensure stops belong to this corridor slice
-        corridor_stops = [
-            code for code in scheduled_stops if code in self.ordered_station_codes
-        ]
-        if not corridor_stops:
-            corridor_stops = self.ordered_station_codes
-
+        trip_number = 0
         while True:
+            scheduled = first_departure + trip_number * interval
+            if env.now < scheduled:
+                yield env.timeout(scheduled - env.now)
+            trip_number += 1
+            if pool is not None:
+                vehicle_id = yield pool.get()
+                self.dispatch_delays_sec.append(env.now - scheduled)
+            else:
+                vehicle_id = f"{service.route}-T{trip_number:03d}"
+
             bus = Bus(
-                bus_id=f"{route}_{id_counter}",
-                route=route,
-                max_capacity=160,
-                scheduled_stops=corridor_stops,
+                bus_id=f"{service.route}_{trip_number}",
+                route=service.route,
+                max_capacity=service.capacity,
+                scheduled_stops=list(service.stops),
+                vehicle_id=vehicle_id,
             )
             self.simulated_buses.append(bus)
-            env.process(self.bus_trip_process(env, bus, rng))
-            id_counter += 1
-            yield env.timeout(interval_sec)
+            env.process(self._run_trip(env, bus, service, pool))
 
+    # ------------------------------------------------------------ simulation
     def simulate(
         self,
         headways: dict[str, float],
@@ -359,139 +310,131 @@ class CorridorSimulator:
         seed: int = 42,
     ) -> SimulationResult:
         """
-        Executes a discrete event simulation run for the given headway schedule.
+        Run one simulation.
 
         Args:
-            headways: Dictionary mapping route codes to dispatch headways in minutes.
+            headways: Headway (minutes) per optimizable route. Routes not listed
+                (background services) run their GTFS headway.
             start_hour: Simulation start hour (default 6 AM).
             end_hour: Simulation end hour (default 9 AM).
-            duration_hours: Optional override for simulation length in hours.
-            seed: Pseudo-random generator seed for reproducible stochastic runs.
-
-        Returns:
-            A SimulationResult object with aggregate KPIs and granular metrics.
+            duration_hours: Optional override for the simulated length.
+            seed: Seed of the pseudo-random generator.
         """
         if duration_hours is not None:
-            end_hour = start_hour + int(duration_hours)
+            end_hour = start_hour + math.ceil(duration_hours)
+        duration_seconds = (
+            duration_hours * 3600.0
+            if duration_hours is not None
+            else (end_hour - start_hour) * 3600.0
+        )
 
         env = simpy.Environment()
         self.reset_environment(env, start_hour, end_hour)
-        sim_rng = random.Random(seed)
+        rng = random.Random(seed)
 
         env.process(self.demand_updater_process(env))
         env.process(self.queue_monitor_process(env))
-
         for station in self.stations.values():
-            env.process(self.passenger_arrival_process(env, station, sim_rng))
+            env.process(self.passenger_arrival_process(env, station, rng))
 
-        bus_id_base = 1
-        for route_code, interval_min in headways.items():
-            env.process(
-                self.dispatch_loop(env, route_code, interval_min, bus_id_base, sim_rng)
-            )
-            bus_id_base += 1000
+        for route, service in self.scenario.services.items():
+            if route in headways:
+                headway = headways[route]
+                fleet = (
+                    math.ceil(service.leg_time_min / headway) + service.return_fleet
+                    if service.is_optimizable
+                    else None
+                )
+            else:
+                headway, fleet = service.headway_gtfs_min, None
+            env.process(self.dispatch_loop(env, service, headway, fleet, rng))
 
-        duration_seconds = (end_hour - start_hour) * 3600.0
         env.run(until=duration_seconds)
+        return self._build_result(env, list(headways))
 
-        # Aggregate corridor performance metrics
-        total_transported = sum(s.total_boardings for s in self.stations.values())
-        total_arrivals = sum(s.total_arrivals for s in self.stations.values())
-        remaining_queue = sum(len(s.waiting_queue) for s in self.stations.values())
+    def _build_result(
+        self, env: simpy.Environment, evaluated_routes: list[str]
+    ) -> SimulationResult:
+        stations = sorted(self.stations.values(), key=lambda s: s.sequence)
+        # Passengers still waiting have waited until the end of the run.
+        for station in stations:
+            station.cumulative_waiting_time_sec += sum(
+                env.now - p.arrival_time_sec for p in station.waiting_queue
+            )
 
-        total_wait_sec = sum(
-            s.cumulative_waiting_time_sec for s in self.stations.values()
-        )
-        avg_wait_min = (total_wait_sec / max(1, total_arrivals)) / 60.0
-
-        all_occupancies = [
+        total_arrivals = sum(s.total_arrivals for s in stations)
+        total_wait_sec = sum(s.cumulative_waiting_time_sec for s in stations)
+        occupancies = [
             occ for bus in self.simulated_buses for occ in bus.occupancy_history
         ]
-        avg_occupancy = sum(all_occupancies) / max(1, len(all_occupancies))
         overcrowded_pct = (
-            sum(1 for occ in all_occupancies if occ >= 0.95)
-            / max(1, len(all_occupancies))
+            sum(occ >= OVERCROWDED_LOAD_FACTOR for occ in occupancies)
+            / len(occupancies)
             * 100
-            if all_occupancies
+            if occupancies
             else 0.0
         )
 
-        # Granular per-station metrics
         station_metrics = [
             {
-                "codigo": station.station_code,
-                "nombre": station.name,
-                "secuencia": station.sequence,
-                "llegadas_torniquete": station.total_arrivals,
-                "abordajes_bus": station.total_boardings,
-                "descensos_torniquete": station.total_alightings,
-                "cola_final": len(station.waiting_queue),
-                "cola_corriente": station.local_queue_count,
-                "cola_expreso": station.express_queue_count,
+                "codigo": s.station_code,
+                "nombre": s.name,
+                "secuencia": s.sequence,
+                "llegadas_torniquete": s.total_arrivals,
+                "abordajes_bus": s.total_boardings,
+                "descensos_torniquete": s.total_alightings,
+                "cola_final": len(s.waiting_queue),
                 "espera_promedio_min": round(
-                    (
-                        station.cumulative_waiting_time_sec
-                        / max(1, station.total_arrivals)
-                    )
-                    / 60.0,
-                    1,
+                    s.cumulative_waiting_time_sec / max(1, s.total_arrivals) / 60.0, 2
                 ),
             }
-            for station in sorted(self.stations.values(), key=lambda s: s.sequence)
+            for s in stations
         ]
 
-        # Consolidate load profiles per route
-        route_profiles: dict[str, list[dict]] = {}
-        for r in headways:
-            route_buses = [
-                b
-                for b in self.simulated_buses
-                if b.route == r and b.passenger_profile_by_stop
-            ]
-            if route_buses:
-                station_records: dict[str, dict] = {}
-                for b in route_buses:
-                    for reg in b.passenger_profile_by_stop:
-                        st_name = reg["estacion"]
-                        if st_name not in station_records:
-                            station_records[st_name] = {
-                                "nombre": st_name,
-                                "secuencia": reg["secuencia"],
-                                "a_bordo": [],
-                                "suben": [],
-                                "bajan": [],
-                            }
-                        station_records[st_name]["a_bordo"].append(reg["a_bordo"])
-                        station_records[st_name]["suben"].append(reg["suben"])
-                        station_records[st_name]["bajan"].append(reg["bajan"])
-
-                stats_list = []
-                sorted_records = sorted(
-                    station_records.values(), key=lambda d: d["secuencia"]
-                )
-                for data in sorted_records:
-                    mean_load = sum(data["a_bordo"]) / max(1, len(data["a_bordo"]))
-                    mean_board = sum(data["suben"]) / max(1, len(data["suben"]))
-                    mean_alight = sum(data["bajan"]) / max(1, len(data["bajan"]))
-                    stats_list.append(
-                        {
-                            "estacion": data["nombre"],
-                            "secuencia": data["secuencia"],
-                            "promedio_a_bordo": round(mean_load, 1),
-                            "promedio_suben": round(mean_board, 1),
-                            "promedio_bajan": round(mean_alight, 1),
-                            "ocupacion_pct": round((mean_load / 160.0) * 100, 1),
-                        }
-                    )
-                route_profiles[r] = stats_list
-
         return SimulationResult(
-            avg_waiting_time_min=avg_wait_min,
-            avg_occupancy_rate=avg_occupancy,
+            avg_waiting_time_min=total_wait_sec / max(1, total_arrivals) / 60.0,
+            avg_occupancy_rate=sum(occupancies) / max(1, len(occupancies)),
             overcrowded_bus_pct=overcrowded_pct,
-            total_transported_passengers=total_transported,
-            stranded_passengers_in_queue=remaining_queue,
+            total_transported_passengers=sum(s.total_boardings for s in stations),
+            stranded_passengers_in_queue=sum(len(s.waiting_queue) for s in stations),
             total_dispatched_buses=len(self.simulated_buses),
             station_metrics=station_metrics,
-            route_load_profiles=route_profiles,
+            route_load_profiles=self._route_load_profiles(evaluated_routes),
+            od_counts=dict(self.od_counts),
+            avg_dispatch_delay_min=(
+                sum(self.dispatch_delays_sec) / len(self.dispatch_delays_sec) / 60.0
+                if self.dispatch_delays_sec
+                else 0.0
+            ),
         )
+
+    def _route_load_profiles(self, routes: list[str]) -> dict[str, list[dict]]:
+        """Mean load, boardings and alightings per stop for each route."""
+        profiles: dict[str, list[dict]] = {}
+        for route in routes:
+            records = [
+                record
+                for bus in self.simulated_buses
+                if bus.route == route
+                for record in bus.passenger_profile_by_stop
+            ]
+            if not records:
+                continue
+            capacity = self.scenario.services[route].capacity
+            profile = (
+                pl.DataFrame(records)
+                .group_by(["estacion", "secuencia"])
+                .agg(
+                    pl.col("a_bordo").mean().round(1).alias("promedio_a_bordo"),
+                    pl.col("suben").mean().round(1).alias("promedio_suben"),
+                    pl.col("bajan").mean().round(1).alias("promedio_bajan"),
+                )
+                .with_columns(
+                    (pl.col("promedio_a_bordo") / capacity * 100)
+                    .round(1)
+                    .alias("ocupacion_pct")
+                )
+                .sort("secuencia")
+            )
+            profiles[route] = profile.to_dicts()
+        return profiles
