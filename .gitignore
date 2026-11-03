@@ -12,6 +12,7 @@ wheels/
 
 # Ignorar data (solo se dejan los comprimidos)
 *.txt
+!frontend/public/data/frequencies.txt
 *.zip
 *.csv
 *.parquet
