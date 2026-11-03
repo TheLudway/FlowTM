@@ -6,7 +6,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 2.65,
-    "cycle_time_min": 124.0,
+    "cycle_time_min": 129.0,
     "stops": [
       "02101",
       "02103",
@@ -23,7 +23,7 @@
     "color": "#ff0000",
     "role": "optimizable",
     "headway_min": 3.27,
-    "cycle_time_min": 182.4,
+    "cycle_time_min": 195.2,
     "stops": [
       "02000",
       "02102",
@@ -46,7 +46,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 3.4,
-    "cycle_time_min": 131.5,
+    "cycle_time_min": 133.0,
     "stops": [
       "09123",
       "09121"
@@ -61,7 +61,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 3.53,
-    "cycle_time_min": 128.2,
+    "cycle_time_min": 135.5,
     "stops": [
       "02000",
       "02101",
@@ -80,7 +80,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 3.53,
-    "cycle_time_min": 203.0,
+    "cycle_time_min": 222.5,
     "stops": [
       "09123",
       "09119",
@@ -96,7 +96,7 @@
     "color": "#ff0000",
     "role": "optimizable",
     "headway_min": 3.75,
-    "cycle_time_min": 195.0,
+    "cycle_time_min": 213.1,
     "stops": [
       "02000",
       "02101",
@@ -119,7 +119,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 3.75,
-    "cycle_time_min": 112.5,
+    "cycle_time_min": 125.4,
     "stops": [
       "09123",
       "09119",
@@ -135,7 +135,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 3.83,
-    "cycle_time_min": 112.5,
+    "cycle_time_min": 113.5,
     "stops": [
       "02000",
       "02101",
@@ -156,7 +156,7 @@
     "color": "#ff0000",
     "role": "optimizable",
     "headway_min": 4.5,
-    "cycle_time_min": 132.4,
+    "cycle_time_min": 141.4,
     "stops": [
       "02200",
       "02201",
@@ -175,7 +175,7 @@
     "color": "#ff0000",
     "role": "optimizable",
     "headway_min": 5.0,
-    "cycle_time_min": 106.0,
+    "cycle_time_min": 110.4,
     "stops": [
       "02000",
       "02101",
@@ -197,7 +197,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 5.14,
-    "cycle_time_min": 151.1,
+    "cycle_time_min": 161.8,
     "stops": [
       "02101",
       "02104",
@@ -216,7 +216,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 5.45,
-    "cycle_time_min": 101.8,
+    "cycle_time_min": 104.8,
     "stops": [
       "02000",
       "02101",
@@ -236,7 +236,7 @@
     "color": "#ff0000",
     "role": "optimizable",
     "headway_min": 5.45,
-    "cycle_time_min": 186.5,
+    "cycle_time_min": 188.0,
     "stops": [
       "02000",
       "02101",
@@ -255,7 +255,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 5.45,
-    "cycle_time_min": 149.8,
+    "cycle_time_min": 154.0,
     "stops": [
       "02101",
       "02103",
@@ -272,7 +272,7 @@
     "color": "#ff0000",
     "role": "optimizable",
     "headway_min": 6.0,
-    "cycle_time_min": 174.2,
+    "cycle_time_min": 188.8,
     "stops": [
       "02200",
       "02202",
@@ -290,7 +290,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 6.67,
-    "cycle_time_min": 155.0,
+    "cycle_time_min": 159.5,
     "stops": [
       "02000",
       "02102",
@@ -309,7 +309,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 6.67,
-    "cycle_time_min": 145.1,
+    "cycle_time_min": 153.8,
     "stops": [
       "09123",
       "09118"
@@ -324,7 +324,7 @@
     "color": "#ff0000",
     "role": "fondo",
     "headway_min": 6.92,
-    "cycle_time_min": 148.8,
+    "cycle_time_min": 151.8,
     "stops": [
       "02000",
       "02101",

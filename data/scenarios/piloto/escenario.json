@@ -19,10 +19,16 @@
     "K23",
     "L18"
   ],
-  "flota_maxima": 225,
+  "flota_maxima": 244,
+  "validacion_flota_gtfs": {
+    "en_servicio_promedio": 215.5,
+    "en_servicio_pico": 243,
+    "en_regulacion_estimado": 13.5
+  },
   "capacidad_bus_pax": 160,
   "supuestos": [
     "Capacidad articulada uniforme (160 pax): el GTFS no publica el tipo de vehículo.",
+    "Flota por sentido (ley de Little) con duraciones y frecuencias del pico AM y 5 min de regulación por cabecera; el regreso opera a su frecuencia GTFS.",
     "Reparto por sentido con modelo gravitacional sobre las salidas AM observadas.",
     "Destinos fuera del corredor agregados en un sumidero sur (SUR).",
     "Calle 72, Calle 63 y Calle 45 sin servicio troncal en el GTFS (obras 2026).",
