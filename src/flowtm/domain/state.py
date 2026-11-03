@@ -81,57 +81,122 @@ class ScheduleState:
             fixed_fleet=self.fixed_fleet.copy(),
         )
 
+    def with_headways(self, headways: dict[str, float]) -> "ScheduleState":
+        """Same routes, leg times and fleet bound with different headways."""
+        return ScheduleState(
+            headways=dict(headways),
+            leg_times=self.leg_times,
+            max_fleet=self.max_fleet,
+            fixed_fleet=self.fixed_fleet,
+        )
+
     def generate_neighbor(
         self,
         step_min: float = 0.5,
         rng: random.Random | None = None,
         max_attempts: int = 10,
+        move: str = "mixed",
     ) -> "ScheduleState":
         """
-        Agent Action:
-        Generates an adjacent candidate state by perturbing dispatch headways.
-        Reducing the interval on one route (increasing frequency) is compensated by
-        increasing the interval on another route.
+        Agent Action: an adjacent candidate obtained by perturbing headways.
 
-        The fleet constraint is enforced by construction: only candidates with
-        ``total_fleet_used() <= max_fleet`` are returned. If no feasible candidate
-        is found within ``max_attempts``, an unchanged copy of the current state is
-        returned instead.
+        Move types:
+            * ``swap``: one route gains frequency (-step) and another loses it
+              (+step), redistributing fleet between routes.
+            * ``single``: one route changes by +/-step, freeing or using fleet.
+            * ``mixed``: each attempt picks ``swap`` or ``single`` at random.
+
+        The fleet constraint holds by construction: only candidates with
+        ``total_fleet_used() <= max_fleet`` are returned; if none is found within
+        ``max_attempts``, an unchanged copy of the current state is returned.
 
         Args:
-            step_min: Headway perturbation step in minutes (default 0.5 min).
-            rng: Random generator used for the perturbation. Pass a seeded
-                ``random.Random`` for reproducible searches.
+            step_min: Headway perturbation step in minutes.
+            rng: Random generator; pass a seeded ``random.Random`` to reproduce.
             max_attempts: Number of random perturbations to try.
-
-        Returns:
-            A new ScheduleState representing the perturbed (or unchanged) schedule.
+            move: ``swap``, ``single`` or ``mixed``.
         """
+        if move not in {"swap", "single", "mixed"}:
+            raise ValueError(f"Movimiento desconocido: {move}")
         rng = rng or random.Random()
         routes = list(self.headways.keys())
-
-        if len(routes) < 2:
+        if not routes or (move == "swap" and len(routes) < 2):
             return self.copy()
 
         for _ in range(max_attempts):
+            kind = move
+            if move == "mixed":
+                kind = "swap" if len(routes) >= 2 and rng.random() < 0.5 else "single"
+
             candidate_headways = self.headways.copy()
-            route_boost = rng.choice(routes)
-            route_trim = rng.choice([r for r in routes if r != route_boost])
+            if kind == "swap":
+                route_boost = rng.choice(routes)
+                route_trim = rng.choice([r for r in routes if r != route_boost])
+                candidate_headways[route_boost] = clip_headway(
+                    candidate_headways[route_boost] - step_min
+                )
+                candidate_headways[route_trim] = clip_headway(
+                    candidate_headways[route_trim] + step_min
+                )
+            else:
+                route = rng.choice(routes)
+                candidate_headways[route] = clip_headway(
+                    candidate_headways[route] + rng.choice((-step_min, step_min))
+                )
 
-            candidate_headways[route_boost] = clip_headway(
-                candidate_headways[route_boost] - step_min
-            )
-            candidate_headways[route_trim] = clip_headway(
-                candidate_headways[route_trim] + step_min
-            )
-
-            candidate_state = ScheduleState(
-                headways=candidate_headways,
-                leg_times=self.leg_times,
-                max_fleet=self.max_fleet,
-                fixed_fleet=self.fixed_fleet,
-            )
+            if candidate_headways == self.headways:
+                continue
+            candidate_state = self.with_headways(candidate_headways)
             if candidate_state.is_fleet_feasible():
                 return candidate_state
 
         return self.copy()
+
+    def random_feasible(
+        self, rng: random.Random, max_attempts: int = 200
+    ) -> "ScheduleState":
+        """
+        Uniform random schedule in [2, 15]^n (0.5-minute grid) that satisfies the
+        fleet bound; returns a copy of the current state if none is found.
+        """
+        grid = [
+            MIN_HEADWAY_MIN + 0.5 * k
+            for k in range(int((MAX_HEADWAY_MIN - MIN_HEADWAY_MIN) / 0.5) + 1)
+        ]
+        for _ in range(max_attempts):
+            candidate = self.with_headways({r: rng.choice(grid) for r in self.headways})
+            if candidate.is_fleet_feasible():
+                return candidate
+        return self.copy()
+
+    def repaired_to_fleet(self, step_min: float = 0.5) -> "ScheduleState":
+        """
+        Closest feasible schedule obtained by greedily lengthening the headway of
+        the route that frees the most vehicles per step. Used when the fleet bound
+        is set below the fleet the current schedule needs.
+        """
+        state = self.copy()
+        while not state.is_fleet_feasible():
+            best_route, best_gain = None, 0.0
+            for route, headway in state.headways.items():
+                longer = clip_headway(headway + step_min)
+                if longer <= headway:
+                    continue
+                # Continuous fleet freed (T/h): ceil() plateaus would stall a
+                # purely integer greedy rule.
+                gain = self.leg_times[route] / headway - self.leg_times[route] / longer
+                if gain > best_gain:
+                    best_route, best_gain = route, gain
+            if best_route is None:
+                # Even the sparsest schedule cannot meet the bound.
+                raise ValueError(
+                    f"La cota de {self.max_fleet} buses no es alcanzable: el horario "
+                    f"más espaciado requiere {state.total_fleet_used()} buses."
+                )
+            state = state.with_headways(
+                {
+                    **state.headways,
+                    best_route: clip_headway(state.headways[best_route] + step_min),
+                }
+            )
+        return state
