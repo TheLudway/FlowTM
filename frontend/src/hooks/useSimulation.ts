@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AgentRunPayload,
   AIOptimizationLog,
   BusTrajectory,
   BusTypology,
@@ -361,13 +362,17 @@ export function useSimulation() {
       return closest ? closest.queues : {};
     }
 
-    // Fallback: coordinate headway queue reduction
-    const res: Record<string, number> = {};
-    for (const [code, q] of Object.entries(currentQueues)) {
-      res[code] = Math.max(0, Math.round(q * 0.65));
-    }
-    return res;
-  }, [queueTimelineOpt, currentQueues, simTimeSec]);
+    // No optimized telemetry loaded: show nothing rather than invented queues.
+    return {};
+  }, [queueTimelineOpt, simTimeSec]);
+
+  /** Replace the optimized scenario with a live agent run from the Agent Lab. */
+  const applyAgentRun = useCallback((run: AgentRunPayload) => {
+    setTrajectoriesOpt(run.replay.bus_trajectories);
+    setQueueTimelineOpt(run.replay.station_queues);
+    setSummaryOpt(run.replay.summary);
+    setAiLog(run.log);
+  }, []);
 
   return {
     stations,
@@ -375,6 +380,7 @@ export function useSimulation() {
     summary,
     summaryOpt,
     aiLog,
+    applyAgentRun,
     simTimeSec,
     durationSec: DURATION_SEC,
     isPlaying,

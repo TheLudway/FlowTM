@@ -23,8 +23,9 @@ from pathlib import Path
 
 import polars as pl
 
+from flowtm.infrastructure import frontend_payload as payload
 from flowtm.simulation.collector import SUMMARY_METRICS_FILENAME
-from flowtm.simulation.scenario import SOUTH_SINK_CODE, CorridorScenario
+from flowtm.simulation.scenario import CorridorScenario
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCENARIO_DIR = ROOT_DIR / "data/scenarios/piloto"
@@ -77,8 +78,6 @@ for row in df_stations.iter_rows(named=True):
 with open(OUTPUT_DIR / "stations.json", "w", encoding="utf-8") as f:
     json.dump(stations, f, indent=2, ensure_ascii=False)
 print(f"[INFO] {len(stations)} estaciones enriquecidas exportadas a stations.json")
-station_names = {s["code"]: s["name"].title() for s in stations}
-station_names[SOUTH_SINK_CODE] = "Sur (fuera del corredor)"
 
 # 2. Corridor GeoJSON
 features = []
@@ -151,73 +150,30 @@ print(f"[INFO] routes.json exportado ({len(ROUTES_CONFIG)} servicios)")
 
 
 def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
-    """Processes a telemetry directory and writes trajectory, queue, and summary JSON files."""
-    if not telemetry_dir.exists():
-        print(f"[ADVERTENCIA] Se omite {telemetry_dir} (no existe)")
-        return
-
+    """Writes trajectory, queue and summary JSON files for one telemetry directory."""
     buses_parquet = telemetry_dir / "telemetria_buses.parquet"
-    colas_parquet = telemetry_dir / "historial_colas.parquet"
-
-    if not buses_parquet.exists() or not colas_parquet.exists():
+    queues_parquet = telemetry_dir / "historial_colas.parquet"
+    if not buses_parquet.exists() or not queues_parquet.exists():
         print(f"[ADVERTENCIA] Se omite {telemetry_dir} (faltan archivos parquet)")
         return
 
-    # Bus trajectories
-    df_buses = pl.read_parquet(buses_parquet)
-    bus_trajectories = {}
-    for row in df_buses.iter_rows(named=True):
-        b_id = row["bus_id"]
-        if b_id not in bus_trajectories:
-            bus_trajectories[b_id] = {
-                "bus_id": b_id,
-                "route": row["route"],
-                "start_time": float(row["time_sec"]),
-                "end_time": float(row["time_sec"]),
-                "keyframes": [],
-            }
-
-        t = float(row["time_sec"])
-        bus_trajectories[b_id]["end_time"] = max(bus_trajectories[b_id]["end_time"], t)
-        bus_trajectories[b_id]["keyframes"].append(
-            {
-                "t": t,
-                "lat": float(row["lat"]),
-                "lon": float(row["lon"]),
-                "occ": float(row["occupancy_pct"]),
-                "pax": int(row["passengers"]),
-            }
-        )
-
-    for b in bus_trajectories.values():
-        b["keyframes"].sort(key=lambda x: x["t"])
-
-    bus_list = list(bus_trajectories.values())
+    trajectories = payload.bus_trajectories(pl.read_parquet(buses_parquet).to_dicts())
     traj_filename = f"bus_trajectories{suffix}.json"
     with open(OUTPUT_DIR / traj_filename, "w", encoding="utf-8") as f:
-        json.dump(bus_list, f, separators=(",", ":"))
-    print(f"[INFO] {len(bus_list)} trayectorias de buses exportadas a {traj_filename}")
-
-    # Station queues
-    df_colas = pl.read_parquet(colas_parquet)
-    time_queues = {}
-    for row in df_colas.iter_rows(named=True):
-        t = int(row["time_sec"])
-        if t not in time_queues:
-            time_queues[t] = {}
-        time_queues[t][row["station_code"]] = int(row["queue_size"])
-
-    queue_timeline = [{"t": t, "queues": q} for t, q in sorted(time_queues.items())]
-    queues_filename = f"station_queues{suffix}.json"
-    with open(OUTPUT_DIR / queues_filename, "w", encoding="utf-8") as f:
-        json.dump(queue_timeline, f, separators=(",", ":"))
+        json.dump(trajectories, f, separators=(",", ":"))
     print(
-        f"[INFO] {len(queue_timeline)} instantes de colas exportados a {queues_filename}"
+        f"[INFO] {len(trajectories)} trayectorias de buses exportadas a {traj_filename}"
     )
 
-    # Summary: KPIs come from the simulator run (metricas_resumen.json written by
-    # scripts 02/03), never from hardcoded fallbacks.
-    max_queue = int(df_colas["queue_size"].max())
+    queues_df = pl.read_parquet(queues_parquet)
+    timeline = payload.queue_timeline(queues_df.to_dicts())
+    queues_filename = f"station_queues{suffix}.json"
+    with open(OUTPUT_DIR / queues_filename, "w", encoding="utf-8") as f:
+        json.dump(timeline, f, separators=(",", ":"))
+    print(f"[INFO] {len(timeline)} instantes de colas exportados a {queues_filename}")
+
+    # KPIs come from the simulator run (metricas_resumen.json written by scripts
+    # 02/03), never from hardcoded fallbacks.
     metrics_path = telemetry_dir / SUMMARY_METRICS_FILENAME
     if not metrics_path.exists():
         raise SystemExit(
@@ -225,37 +181,13 @@ def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
             "scripts/02_correr_simulador_base.py y scripts/03_optimizar_frecuencias.py "
             "antes de exportar."
         )
-    with open(metrics_path, encoding="utf-8") as f:
-        run_metrics = json.load(f)
-
-    summary = {
-        "total_dispatched_buses": run_metrics["total_dispatched_buses"],
-        "total_passengers_served": run_metrics["total_passengers_served"],
-        "avg_waiting_time_min": run_metrics["avg_waiting_time_min"],
-        "avg_occupancy_pct": run_metrics["avg_occupancy_pct"],
-        "overcrowded_buses_pct": run_metrics["overcrowded_buses_pct"],
-        "stranded_passengers_in_queue": run_metrics["stranded_passengers_in_queue"],
-        "max_queue_station": max_queue,
-        "avg_dispatch_delay_min": run_metrics.get("avg_dispatch_delay_min", 0.0),
-        "od_top": [
-            {
-                **pair,
-                "origin_name": station_names.get(pair["origin"], pair["origin"]),
-                "destination_name": station_names.get(
-                    pair["destination"], pair["destination"]
-                ),
-            }
-            for pair in run_metrics.get("od_top", [])
-        ],
-        "active_routes": len(ROUTES_CONFIG),
-        "optimizable_routes": len(scenario.optimizable_routes),
-        "total_stations": len(stations),
-        "sim_duration_sec": 10800,
-        "start_hour": 6,
-    }
+    run_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    summary = payload.summary_payload(
+        run_metrics, int(queues_df["queue_size"].max()), scenario
+    )
     summary_filename = f"summary{suffix}.json"
     with open(OUTPUT_DIR / summary_filename, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
+        json.dump(summary, f, indent=2, ensure_ascii=False)
     print(f"[INFO] {summary_filename} exportado")
 
 
