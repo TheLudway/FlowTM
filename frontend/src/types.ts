@@ -1,5 +1,5 @@
 export type ThemeMode = 'system' | 'dark' | 'light';
-export type ActiveView = 'map' | 'analytics';
+export type ActiveView = 'map' | 'analytics' | 'agent';
 
 export type BusTypology = 'articulado' | 'biarticulado';
 
@@ -119,7 +119,11 @@ export interface SelectedEntity {
 
 export interface AIOptimizationIteration {
   iteration: number;
-  temperature: number;
+  temperature: number | null;
+  evaluations?: number;
+  candidate_headways?: Record<string, number>;
+  candidate_utility?: number;
+  candidate_utility_se?: number;
   headways: Record<string, number>;
   utility: number;
   delta_u: number;
@@ -171,4 +175,38 @@ export interface AIOptimizationLog {
   optimizable_routes?: string[];
   background_routes?: string[];
   history: AIOptimizationIteration[];
+}
+
+/** Replay telemetry of a schedule in the frontend contracts. */
+export interface ReplayPayload {
+  bus_trajectories: BusTrajectory[];
+  station_queues: QueueTimestamp[];
+  summary: SummaryKPIs;
+}
+
+/** An agent run from the Agent Lab, ready to be shown on the map. */
+export interface AgentRunPayload {
+  replay: ReplayPayload;
+  log: AIOptimizationLog;
+}
+
+export interface PairedStat {
+  base: number;
+  candidato: number;
+  diferencia: number;
+  diferencia_pct: number;
+  ic95: [number, number];
+  semillas_mejor: number;
+  semillas: number;
+  significativo: boolean;
+}
+
+export interface HoldoutReport {
+  semillas: number[];
+  utilidad: PairedStat;
+  espera_min: PairedStat;
+  sobrecupo_pct: PairedStat;
+  varados: PairedStat;
+  transportados: PairedStat;
+  flota: { base: number; candidato: number };
 }

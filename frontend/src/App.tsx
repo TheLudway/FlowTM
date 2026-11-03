@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AgentLab } from './components/AgentLab';
 import { AnalyticsView } from './components/AnalyticsView';
 import { Header } from './components/Header';
 import { InspectorModal } from './components/InspectorModal';
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
     summary,
     summaryOpt,
     aiLog,
+    applyAgentRun,
     simTimeSec,
     durationSec,
     isPlaying,
@@ -252,6 +254,16 @@ export const App: React.FC = () => {
               isSplitView={isSplitView}
             />
           </div>
+        ) : activeView === 'agent' ? (
+          /* Tab 3: Interactive Agent Lab (live search through the API) */
+          <AgentLab
+            routes={routes}
+            onShowOnMap={(run) => {
+              applyAgentRun(run);
+              setIsSplitView(true);
+              setActiveView('map');
+            }}
+          />
         ) : (
           /* Tab 2: Dedicated Analytics Dashboard */
           <AnalyticsView
