@@ -97,7 +97,9 @@ def main() -> None:
             "delta_u_validacion_min": round(min(holdout_deltas), 4),
             "delta_u_validacion_max": round(max(holdout_deltas), 4),
             "corridas_significativas": sum(
-                r["holdout"]["utilidad"]["significativo"] for r in algorithm_runs
+                r["holdout"]["utilidad"]["significativo"]
+                and r["holdout"]["utilidad"]["mejora"]
+                for r in algorithm_runs
             ),
             "espera_pct_media": round(
                 statistics.fmean(

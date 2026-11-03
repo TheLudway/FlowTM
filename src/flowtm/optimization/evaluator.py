@@ -233,9 +233,9 @@ def holdout_comparison(
             "ic95": [round(mean - half, 4), round(mean + half, 4)],
             "semillas_mejor": wins,
             "semillas": len(diffs),
-            "significativo": (mean - half > 0)
-            if better_if_higher
-            else (mean + half < 0),
+            # The 95% CI excludes zero (in either direction).
+            "significativo": (mean - half > 0) or (mean + half < 0),
+            "mejora": (mean > 0) if better_if_higher else (mean < 0),
         }
 
     return {
