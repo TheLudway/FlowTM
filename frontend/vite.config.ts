@@ -6,5 +6,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // Agent API (uv run uvicorn flowtm.api.app:app --port 8000)
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
   },
 });
