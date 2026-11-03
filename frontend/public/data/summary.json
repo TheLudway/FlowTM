@@ -1,13 +1,81 @@
 {
-  "total_dispatched_buses": 420,
-  "total_passengers_served": 48899,
-  "avg_waiting_time_min": 3.67,
-  "avg_occupancy_pct": 43.1,
-  "overcrowded_buses_pct": 7.4,
-  "stranded_passengers_in_queue": 1273,
-  "max_queue_station": 311,
-  "active_routes": 6,
-  "total_stations": 17,
+  "total_dispatched_buses": 741,
+  "total_passengers_served": 54353,
+  "avg_waiting_time_min": 3.44,
+  "avg_occupancy_pct": 42.5,
+  "overcrowded_buses_pct": 9.7,
+  "stranded_passengers_in_queue": 1600,
+  "max_queue_station": 343,
+  "avg_dispatch_delay_min": 0.0,
+  "od_top": [
+    {
+      "origin": "02000",
+      "destination": "SUR",
+      "passengers": 13674,
+      "share_pct": 24.4,
+      "origin_name": "Portal Norte",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "02101",
+      "destination": "SUR",
+      "passengers": 5547,
+      "share_pct": 9.9,
+      "origin_name": "Toberin Foundever",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "02200",
+      "destination": "SUR",
+      "passengers": 3137,
+      "share_pct": 5.6,
+      "origin_name": "Alcala",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "02103",
+      "destination": "SUR",
+      "passengers": 2727,
+      "share_pct": 4.9,
+      "origin_name": "Mazuren",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "02105",
+      "destination": "SUR",
+      "passengers": 1923,
+      "share_pct": 3.4,
+      "origin_name": "Calle 142",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "02300",
+      "destination": "SUR",
+      "passengers": 1513,
+      "share_pct": 2.7,
+      "origin_name": "Calle 100",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "02104",
+      "destination": "SUR",
+      "passengers": 1386,
+      "share_pct": 2.5,
+      "origin_name": "Calle 146",
+      "destination_name": "Sur (fuera del corredor)"
+    },
+    {
+      "origin": "09118",
+      "destination": "SUR",
+      "passengers": 1380,
+      "share_pct": 2.5,
+      "origin_name": "Marly",
+      "destination_name": "Sur (fuera del corredor)"
+    }
+  ],
+  "active_routes": 18,
+  "optimizable_routes": 6,
+  "total_stations": 19,
   "sim_duration_sec": 10800,
   "start_hour": 6
 }

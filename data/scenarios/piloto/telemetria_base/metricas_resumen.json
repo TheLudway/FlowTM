@@ -1,8 +1,59 @@
 {
-  "avg_waiting_time_min": 3.67,
-  "avg_occupancy_pct": 43.1,
-  "overcrowded_buses_pct": 7.4,
-  "total_passengers_served": 48899,
-  "stranded_passengers_in_queue": 1273,
-  "total_dispatched_buses": 420
+  "avg_waiting_time_min": 3.44,
+  "avg_occupancy_pct": 42.5,
+  "overcrowded_buses_pct": 9.7,
+  "total_passengers_served": 54353,
+  "stranded_passengers_in_queue": 1600,
+  "total_dispatched_buses": 741,
+  "avg_dispatch_delay_min": 0.0,
+  "od_top": [
+    {
+      "origin": "02000",
+      "destination": "SUR",
+      "passengers": 13674,
+      "share_pct": 24.4
+    },
+    {
+      "origin": "02101",
+      "destination": "SUR",
+      "passengers": 5547,
+      "share_pct": 9.9
+    },
+    {
+      "origin": "02200",
+      "destination": "SUR",
+      "passengers": 3137,
+      "share_pct": 5.6
+    },
+    {
+      "origin": "02103",
+      "destination": "SUR",
+      "passengers": 2727,
+      "share_pct": 4.9
+    },
+    {
+      "origin": "02105",
+      "destination": "SUR",
+      "passengers": 1923,
+      "share_pct": 3.4
+    },
+    {
+      "origin": "02300",
+      "destination": "SUR",
+      "passengers": 1513,
+      "share_pct": 2.7
+    },
+    {
+      "origin": "02104",
+      "destination": "SUR",
+      "passengers": 1386,
+      "share_pct": 2.5
+    },
+    {
+      "origin": "09118",
+      "destination": "SUR",
+      "passengers": 1380,
+      "share_pct": 2.5
+    }
+  ]
 }
