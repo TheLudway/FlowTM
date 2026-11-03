@@ -12,6 +12,7 @@ import {
   Warning,
   X,
 } from '@phosphor-icons/react';
+import { StationRoutes } from './StationRoutes';
 import type { AIOptimizationLog, InterpolatedBus, RouteConfig, SelectedEntity } from '../types';
 
 /** Platform queue levels; same thresholds as the map halos and the legend. */
@@ -442,6 +443,9 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
                   </div>
                 );
               })}
+              <div className="comparative-station-routes">
+                <StationRoutes stationCode={data.code} routes={routes} aiLog={aiLog} />
+              </div>
             </div>
           ) : (
             /* SINGLE STATION VIEW */
@@ -490,26 +494,7 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
                 </p>
               </div>
 
-              <div className="inspector-schedule-section">
-                <span className="stat-label">SERVICIOS TRONCALES QUE PARAN AQUÍ</span>
-                <div className="station-routes-chips">
-                  {routes
-                    .filter((r) => r.stops.includes(data.code))
-                    .map((r) => (
-                      <span
-                        key={r.id}
-                        className="station-route-pill"
-                        style={{ borderColor: r.color }}
-                      >
-                        <span
-                          className="route-dot-small"
-                          style={{ backgroundColor: r.color }}
-                        />
-                        {r.id}
-                      </span>
-                    ))}
-                </div>
-              </div>
+              <StationRoutes stationCode={data.code} routes={routes} aiLog={aiLog} />
 
               <div className="inspector-coords-box">
                 <div className="coords-row">
