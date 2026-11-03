@@ -107,6 +107,8 @@ def build_synthetic_scenario(
                 "viajes_pico": int(180 / headway),
                 "recorrido_corredor_min": 15.0,
                 "tiempo_ciclo_min": cycle,
+                "tiempo_tramo_min": cycle,
+                "flota_regreso": 0,
                 "contraparte": None,
                 "continua_al_salir": cont,
                 "capacidad": 160,

@@ -18,7 +18,7 @@ from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
 from flowtm.optimization.utility import UtilityCalculator
 from flowtm.simulation.scenario import CorridorScenario
 
-CYCLE_TIMES = {"R1": 60.0, "R2": 50.0, "R3": 40.0}
+LEG_TIMES = {"R1": 60.0, "R2": 50.0, "R3": 40.0}
 BASE_HEADWAYS = {"R1": 4.0, "R2": 5.0, "R3": 5.0}
 BASE_FLEET = 15 + 10 + 8
 
@@ -26,7 +26,7 @@ BASE_FLEET = 15 + 10 + 8
 def make_state(headways: dict[str, float] | None = None, max_fleet: int = BASE_FLEET):
     return ScheduleState(
         headways=dict(headways or BASE_HEADWAYS),
-        cycle_times=CYCLE_TIMES,
+        leg_times=LEG_TIMES,
         max_fleet=max_fleet,
     )
 
@@ -38,6 +38,19 @@ def test_schedule_state_fleet_formula():
     assert state.total_fleet_used() == BASE_FLEET
     assert state.is_fleet_feasible() is True
     assert make_state(max_fleet=BASE_FLEET - 1).is_fleet_feasible() is False
+
+
+def test_fleet_includes_fixed_return_leg():
+    # Return leg runs at its own GTFS headway: its vehicles do not change with h.
+    state = ScheduleState(
+        headways={"R1": 4.0},
+        leg_times={"R1": 60.0},
+        max_fleet=40,
+        fixed_fleet={"R1": 20},
+    )
+    assert state.fleet_used_by_route() == {"R1": 15 + 20}
+    state.headways["R1"] = 6.0
+    assert state.fleet_used_by_route() == {"R1": 10 + 20}
 
 
 def test_scenario_base_schedule_matches_fleet_bound(synthetic_scenario_dir: Path):
@@ -65,7 +78,7 @@ def test_neighbor_returns_unchanged_state_when_no_feasible_candidate():
     # bus (ceil(60/9.5) + ceil(60/10.5) = 7 + 6 = 13 > 12).
     state = ScheduleState(
         headways={"R1": 10.0, "R2": 10.0},
-        cycle_times={"R1": 60.0, "R2": 60.0},
+        leg_times={"R1": 60.0, "R2": 60.0},
         max_fleet=12,
     )
     neighbor = state.generate_neighbor(step_min=0.5, rng=random.Random(1))

@@ -123,10 +123,28 @@ missing = sorted(set(OPTIMIZED_ROUTES) - set(services["route_short_name"]))
 if missing:
     raise SystemExit(f"[ERROR] Rutas optimizables sin viajes en el GTFS: {missing}")
 
+PEAK_WINDOW = (PEAK_START_SEC, PEAK_END_SEC)
 service_rows = []
 for row in services.iter_rows(named=True):
     route = row["route_short_name"]
     counterpart = gc.counterpart_route(route, northbound_routes)
+    # Fleet per direction (Little's law) with AM-peak trip times and headways:
+    # the optimized leg is the southbound route, the return leg keeps its GTFS
+    # headway. Trips of both legs run the whole route, not only the corridor.
+    outbound_min = gc.route_trip_minutes(events, route, PEAK_WINDOW)
+    return_min = (
+        gc.route_trip_minutes(events, counterpart, PEAK_WINDOW) if counterpart else None
+    )
+    return_headway = (
+        gc.route_headway_minutes(events, counterpart, PEAK_WINDOW)
+        if counterpart
+        else None
+    )
+    return_fleet = (
+        gc.leg_fleet(return_min, return_headway)
+        if return_min is not None and return_headway is not None
+        else 0
+    )
     service_rows.append(
         {
             "ruta": route,
@@ -137,7 +155,16 @@ for row in services.iter_rows(named=True):
             "headway_gtfs_min": row["headway_gtfs_min"],
             "viajes_pico": row["viajes_pico"],
             "recorrido_corredor_min": round(row["recorrido_corredor_min"], 1),
-            "tiempo_ciclo_min": gc.cycle_time_minutes(events, route, counterpart),
+            "tiempo_ciclo_min": gc.cycle_time_minutes(
+                events, route, counterpart, PEAK_WINDOW
+            ),
+            "duracion_ida_min": round(outbound_min or 0.0, 1),
+            "duracion_regreso_min": round(return_min or 0.0, 1),
+            "headway_regreso_min": round(return_headway or 0.0, 2),
+            "tiempo_tramo_min": round(
+                (outbound_min or 0.0) + gc.TERMINAL_LAYOVER_MIN, 1
+            ),
+            "flota_regreso": return_fleet,
             "contraparte": counterpart,
             "continua_al_salir": row["continua_al_salir"],
             "capacidad": BUS_CAPACITY_PAX,
@@ -269,10 +296,33 @@ demand = (
 # 5. Fleet bound: buses TransMilenio assigns today to the optimizable routes -----
 optimizable = services_df.filter(pl.col("rol") == "optimizable")
 base_fleet = sum(
-    math.ceil(cycle / headway)
-    for cycle, headway in optimizable.select(
-        "tiempo_ciclo_min", "headway_gtfs_min"
+    math.ceil(leg / headway) + fixed
+    for leg, headway, fixed in optimizable.select(
+        "tiempo_tramo_min", "headway_gtfs_min", "flota_regreso"
     ).iter_rows()
+)
+
+# Independent check of B_max: trips of the optimizable routes and their return
+# routes simultaneously in service (GTFS), plus vehicles in terminal layover.
+pair_routes = [
+    *optimizable["ruta"].to_list(),
+    *[c for c in optimizable["contraparte"].to_list() if c],
+]
+in_service = gc.trips_in_service(events, pair_routes, PEAK_WINDOW)
+layover_vehicles = sum(
+    gc.TERMINAL_LAYOVER_MIN / h
+    for h in [*optimizable["headway_gtfs_min"], *optimizable["headway_regreso_min"]]
+    if h
+)
+fleet_check = {
+    "en_servicio_promedio": round(sum(in_service) / len(in_service), 1),
+    "en_servicio_pico": max(in_service),
+    "en_regulacion_estimado": round(layover_vehicles, 1),
+}
+print(
+    f"[INFO] Validación de B_max con el GTFS: {fleet_check['en_servicio_pico']} buses en "
+    f"viaje en el instante pico + ~{layover_vehicles:.0f} en regulación "
+    f"(promedio 06-09h: {fleet_check['en_servicio_promedio']:.0f} en viaje)"
 )
 
 # 6. Persist --------------------------------------------------------------------
@@ -300,9 +350,11 @@ metadata = {
     "dias_habiles_salidas": exit_days,
     "rutas_optimizables": list(OPTIMIZED_ROUTES),
     "flota_maxima": base_fleet,
+    "validacion_flota_gtfs": fleet_check,
     "capacidad_bus_pax": BUS_CAPACITY_PAX,
     "supuestos": [
         "Capacidad articulada uniforme (160 pax): el GTFS no publica el tipo de vehículo.",
+        "Flota por sentido (ley de Little) con duraciones y frecuencias del pico AM y 5 min de regulación por cabecera; el regreso opera a su frecuencia GTFS.",
         "Reparto por sentido con modelo gravitacional sobre las salidas AM observadas.",
         "Destinos fuera del corredor agregados en un sumidero sur (SUR).",
         "Calle 72, Calle 63 y Calle 45 sin servicio troncal en el GTFS (obras 2026).",

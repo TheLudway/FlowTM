@@ -44,6 +44,8 @@ class ServiceSpec:
     corridor_run_min: float
     continues_after: bool
     capacity: int
+    leg_time_min: float = 0.0
+    return_fleet: int = 0
 
     @property
     def is_optimizable(self) -> bool:
@@ -83,6 +85,8 @@ class CorridorScenario:
                 corridor_run_min=float(row["recorrido_corredor_min"]),
                 continues_after=bool(row["continua_al_salir"]),
                 capacity=int(row["capacidad"]),
+                leg_time_min=float(row.get("tiempo_tramo_min") or 0.0),
+                return_fleet=int(row.get("flota_regreso") or 0),
             )
             for row in services_df.iter_rows(named=True)
         }
@@ -123,13 +127,12 @@ class CorridorScenario:
         """GTFS peak headways of the optimizable routes (current operation)."""
         return {r: self.services[r].headway_gtfs_min for r in self.optimizable_routes}
 
-    def cycle_times(self) -> dict[str, float]:
-        return {r: self.services[r].cycle_time_min for r in self.optimizable_routes}
-
     def base_schedule(self) -> ScheduleState:
         """Schedule state of the current GTFS operation."""
+        routes = self.optimizable_routes
         return ScheduleState(
             headways=self.base_headways(),
-            cycle_times=self.cycle_times(),
+            leg_times={r: self.services[r].leg_time_min for r in routes},
             max_fleet=self.max_fleet,
+            fixed_fleet={r: self.services[r].return_fleet for r in routes},
         )

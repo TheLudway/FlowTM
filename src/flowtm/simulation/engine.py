@@ -16,9 +16,10 @@ Discrete Event Simulation (DES) of the southbound corridor on SimPy.
 * Supply: every trunk service published in the GTFS for the corridor, with its
   real stop pattern. Optimizable routes run the headways under evaluation;
   background routes run their GTFS headway.
-* Physical fleet: each optimizable route owns ``ceil(T_r / h_r)`` vehicles that
-  return to the terminal after their GTFS cycle time. When no vehicle is
-  available, the dispatch is delayed, so fleet shortages emerge in the KPIs.
+* Physical fleet: each optimizable route owns the vehicles given by the fleet
+  rule of ``ScheduleState`` (both legs, Little's law). A vehicle is back at the
+  terminal after its GTFS peak cycle (outbound + return + layovers); when none
+  is available the dispatch is delayed, so fleet shortages emerge in the KPIs.
 * Platforms: each station has as many docking bays as stopping positions
   (official wagon count / GTFS platforms); full bays make buses queue (bunching).
 """
@@ -340,7 +341,7 @@ class CorridorSimulator:
             if route in headways:
                 headway = headways[route]
                 fleet = (
-                    math.ceil(service.cycle_time_min / headway)
+                    math.ceil(service.leg_time_min / headway) + service.return_fleet
                     if service.is_optimizable
                     else None
                 )

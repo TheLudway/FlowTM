@@ -296,20 +296,74 @@ def segment_running_times(
     return [*running_times, 0.0]
 
 
-def route_trip_minutes(events: pl.DataFrame, route_short_name: str) -> float | None:
-    """Median end-to-end duration (minutes) of a route's weekday trips."""
+def _route_trips(
+    events: pl.DataFrame,
+    route_short_name: str,
+    window: tuple[int, int] | None = None,
+) -> pl.DataFrame:
+    """One row per trip of a route (start, minutes), optionally starting in ``window``."""
     trips = (
         events.filter(pl.col("route_short_name") == route_short_name)
         .group_by("trip_id")
         .agg(
+            pl.col("departure_time").min().alias("start"),
             (
                 (pl.col("arrival_time").max() - pl.col("departure_time").min()) / 60.0
-            ).alias("minutes")
+            ).alias("minutes"),
         )
     )
+    if window is not None:
+        trips = trips.filter(pl.col("start").is_between(window[0], window[1] - 1))
+    return trips
+
+
+def route_trip_minutes(
+    events: pl.DataFrame,
+    route_short_name: str,
+    window: tuple[int, int] | None = None,
+) -> float | None:
+    """Median end-to-end duration (minutes) of a route's weekday trips."""
+    trips = _route_trips(events, route_short_name, window)
     if trips.is_empty():
         return None
     return float(trips["minutes"].median())
+
+
+def route_headway_minutes(
+    events: pl.DataFrame, route_short_name: str, window: tuple[int, int]
+) -> float | None:
+    """Mean headway (minutes) of the trips a route starts during ``window``."""
+    count = _route_trips(events, route_short_name, window).height
+    if count == 0:
+        return None
+    return (window[1] - window[0]) / 60.0 / count
+
+
+def trips_in_service(
+    events: pl.DataFrame, routes: list[str], window: tuple[int, int]
+) -> list[int]:
+    """Number of trips of ``routes`` running at every minute of ``window``."""
+    trips = (
+        events.filter(pl.col("route_short_name").is_in(routes))
+        .group_by("trip_id")
+        .agg(
+            pl.col("departure_time").min().alias("start"),
+            pl.col("arrival_time").max().alias("end"),
+        )
+    )
+    starts, ends = trips["start"].to_list(), trips["end"].to_list()
+    return [
+        sum(start <= t <= end for start, end in zip(starts, ends, strict=True))
+        for t in range(window[0], window[1], 60)
+    ]
+
+
+def leg_fleet(trip_minutes: float, headway_minutes: float) -> int:
+    """
+    Vehicles needed to operate one direction (Little's law): vehicles in service
+    plus those in terminal layover, ``ceil((T + layover) / h)``.
+    """
+    return math.ceil((trip_minutes + TERMINAL_LAYOVER_MIN) / headway_minutes)
 
 
 def counterpart_route(route_short_name: str, candidates: list[str]) -> str | None:
@@ -323,11 +377,14 @@ def counterpart_route(route_short_name: str, candidates: list[str]) -> str | Non
 
 
 def cycle_time_minutes(
-    events: pl.DataFrame, route_short_name: str, counterpart: str | None
+    events: pl.DataFrame,
+    route_short_name: str,
+    counterpart: str | None,
+    window: tuple[int, int] | None = None,
 ) -> float:
     """Outbound trip + return trip + one layover per terminal."""
-    outbound = route_trip_minutes(events, route_short_name) or 0.0
-    inbound = route_trip_minutes(events, counterpart) if counterpart else None
+    outbound = route_trip_minutes(events, route_short_name, window) or 0.0
+    inbound = route_trip_minutes(events, counterpart, window) if counterpart else None
     if inbound is None:
         inbound = outbound
     return round(outbound + inbound + 2 * TERMINAL_LAYOVER_MIN, 1)
