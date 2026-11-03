@@ -245,6 +245,8 @@ export const App: React.FC = () => {
                 setIsCameraFollowing(false);
               }}
               routes={routes}
+              optimizedBuses={activeBusesOptimized}
+              aiLog={aiLog}
               isCameraFollowing={isCameraFollowing}
               onToggleCameraFollow={() => setIsCameraFollowing((prev) => !prev)}
               isSplitView={isSplitView}
