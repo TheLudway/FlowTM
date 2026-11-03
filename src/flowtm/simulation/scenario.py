@@ -46,6 +46,7 @@ class ServiceSpec:
     capacity: int
     leg_time_min: float = 0.0
     return_fleet: int = 0
+    counterpart: str | None = None
 
     @property
     def is_optimizable(self) -> bool:
@@ -87,6 +88,7 @@ class CorridorScenario:
                 capacity=int(row["capacidad"]),
                 leg_time_min=float(row.get("tiempo_tramo_min") or 0.0),
                 return_fleet=int(row.get("flota_regreso") or 0),
+                counterpart=row.get("contraparte"),
             )
             for row in services_df.iter_rows(named=True)
         }

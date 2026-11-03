@@ -136,6 +136,7 @@ ROUTES_CONFIG = [
         "service": service.name,
         "color": service.color,
         "role": service.role,
+        "counterpart": service.counterpart,
         "headway_min": service.headway_gtfs_min,
         "cycle_time_min": service.cycle_time_min,
         "stops": list(service.stops),

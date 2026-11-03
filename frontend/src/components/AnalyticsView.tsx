@@ -20,6 +20,7 @@ import type {
   AIOptimizationLog,
   AlgorithmComparison,
   InterpolatedBus,
+  OptimizedSource,
   PairedStat,
   RouteConfig,
   Station,
@@ -117,6 +118,8 @@ interface AnalyticsViewProps {
   currentQueues: Record<string, number>;
   currentQueuesOptimized: Record<string, number>;
   simTimeSec?: number;
+  optimizedSource?: OptimizedSource;
+  onRestoreOptimum?: () => void;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
@@ -129,6 +132,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   stations,
   currentQueues,
   currentQueuesOptimized,
+  optimizedSource = { kind: 'agente' },
+  onRestoreOptimum,
 }) => {
   const [hoveredIteration, setHoveredIteration] = useState<AIOptimizationIteration | null>(null);
 
@@ -484,6 +489,20 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             )}
           </div>
         </header>
+
+        {optimizedSource.kind === 'laboratorio' && (
+          <div className="analytics-source-banner">
+            <span>
+              Está viendo una <b>prueba del Laboratorio IA</b> ({optimizedSource.algorithm}, {optimizedSource.finishedAt}),
+              no el horario óptimo oficial del agente.
+            </span>
+            {onRestoreOptimum && (
+              <button className="badge-restore-btn" onClick={onRestoreOptimum}>
+                Volver al óptimo del agente
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ==================================================================
             FASE 1: DIAGNÓSTICO DE DEMANDA - MATRIZ ORIGEN - DESTINO (TULLAVE)

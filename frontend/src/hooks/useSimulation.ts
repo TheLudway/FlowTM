@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentRunPayload,
   AIOptimizationLog,
+  OptimizedSource,
   BusTrajectory,
   BusTypology,
   InterpolatedBus,
@@ -10,6 +11,9 @@ import type {
   Station,
   SummaryKPIs,
 } from '../types';
+
+/** Same-route buses closer than this are flagged as bunching (legend section 2). */
+export const BUNCHING_DISTANCE_M = 420;
 
 interface RouteTypology {
   bus_type: BusTypology;
@@ -31,8 +35,8 @@ function interpolateBusTrajectories(
   selectedRoute: string | null,
   routeColorMap: Map<string, string>,
   routeTypologyMap: Map<string, RouteTypology>,
-  stations: Station[],
-  isOptimizedScenario = false
+  optimizableRoutes: Set<string>,
+  stations: Station[]
 ): InterpolatedBus[] {
   if (!trajectories.length) return [];
 
@@ -116,13 +120,8 @@ function interpolateBusTrajectories(
       }
     }
 
-    // Dynamic color based on occupancy
-    let displayColor = routeColorMap.get(b.route) || '#E53935';
-    if (occ >= 90) {
-      displayColor = '#E74C3C';
-    } else if (occ >= 75) {
-      displayColor = '#F39C12';
-    }
+    // Fill = route identity; occupancy is encoded only by the ring (see legend).
+    const displayColor = routeColorMap.get(b.route) || '#9E9E9E';
 
     result.push({
       bus_id: b.bus_id,
@@ -132,6 +131,7 @@ function interpolateBusTrajectories(
       occupancy_pct: occ,
       passengers: pax,
       color: displayColor,
+      is_optimizable: optimizableRoutes.has(b.route),
       bus_type: typo.bus_type,
       capacity: typo.capacity,
       length_m: typo.length_m,
@@ -143,20 +143,18 @@ function interpolateBusTrajectories(
     });
   }
 
-  // Bus bunching detection only in baseline scenario
-  if (!isOptimizedScenario) {
-    for (let a = 0; a < result.length; a++) {
-      for (let b = a + 1; b < result.length; b++) {
-        if (result[a].route === result[b].route) {
-          const dLat = (result[a].lat - result[b].lat) * 110574;
-          const dLon = (result[a].lon - result[b].lon) * 110950;
-          const dist = Math.hypot(dLat, dLon);
-          if (dist < 420) {
-            result[a].is_bunching = true;
-            result[a].bunching_with = result[b].bus_id;
-            result[b].is_bunching = true;
-            result[b].bunching_with = result[a].bus_id;
-          }
+  // Bus bunching: two buses of the same route closer than BUNCHING_DISTANCE_M.
+  // Detected in both scenarios so the visual comparison is fair.
+  for (let a = 0; a < result.length; a++) {
+    for (let b = a + 1; b < result.length; b++) {
+      if (result[a].route === result[b].route) {
+        const dLat = (result[a].lat - result[b].lat) * 110574;
+        const dLon = (result[a].lon - result[b].lon) * 110950;
+        if (Math.hypot(dLat, dLon) < BUNCHING_DISTANCE_M) {
+          result[a].is_bunching = true;
+          result[a].bunching_with = result[b].bus_id;
+          result[b].is_bunching = true;
+          result[b].bunching_with = result[a].bus_id;
         }
       }
     }
@@ -175,6 +173,14 @@ export function useSimulation() {
   const [summary, setSummary] = useState<SummaryKPIs | null>(null);
   const [summaryOpt, setSummaryOpt] = useState<SummaryKPIs | null>(null);
   const [aiLog, setAiLog] = useState<AIOptimizationLog | null>(null);
+  const [optimizedSource, setOptimizedSource] = useState<OptimizedSource>({ kind: 'agente' });
+  // Official agent optimum (scripts/03, validated on 30 seeds) to restore after Lab runs.
+  const officialOptimumRef = useRef<{
+    trajectories: BusTrajectory[];
+    queues: QueueTimestamp[];
+    summary: SummaryKPIs | null;
+    log: AIOptimizationLog | null;
+  } | null>(null);
 
   // Simulation Clock state
   const [simTimeSec, setSimTimeSec] = useState<number>(0);
@@ -231,6 +237,12 @@ export function useSimulation() {
         if (qtlOpt && qtlOpt.length > 0) setQueueTimelineOpt(qtlOpt);
         if (smmOpt) setSummaryOpt(smmOpt);
         if (log) setAiLog(log);
+        officialOptimumRef.current = {
+          trajectories: trjsOpt ?? [],
+          queues: qtlOpt ?? [],
+          summary: smmOpt ?? null,
+          log: log ?? null,
+        };
       })
       .catch((err) => console.error('Error loading simulation assets:', err));
   }, []);
@@ -291,6 +303,11 @@ export function useSimulation() {
     return map;
   }, [routes]);
 
+  const optimizableRoutes = useMemo(
+    () => new Set(routes.filter((r) => r.role === 'optimizable').map((r) => r.id)),
+    [routes]
+  );
+
   const routeTypologyMap = useMemo(() => {
     const map = new Map<string, RouteTypology>();
     for (const r of routes) {
@@ -307,10 +324,10 @@ export function useSimulation() {
       selectedRoute,
       routeColorMap,
       routeTypologyMap,
-      stations,
-      false
+      optimizableRoutes,
+      stations
     );
-  }, [trajectories, simTimeSec, selectedRoute, routeColorMap, routeTypologyMap, stations]);
+  }, [trajectories, simTimeSec, selectedRoute, routeColorMap, routeTypologyMap, optimizableRoutes, stations]);
 
   // Optimized scenario: only real exported telemetry is shown (no synthetic fallback).
   const activeBusesOptimized = useMemo<InterpolatedBus[]>(() => {
@@ -321,10 +338,10 @@ export function useSimulation() {
       selectedRoute,
       routeColorMap,
       routeTypologyMap,
-      stations,
-      true
+      optimizableRoutes,
+      stations
     );
-  }, [trajectoriesOpt, simTimeSec, selectedRoute, routeColorMap, routeTypologyMap, stations]);
+  }, [trajectoriesOpt, simTimeSec, selectedRoute, routeColorMap, routeTypologyMap, optimizableRoutes, stations]);
 
   // Compute station queues for Baseline
   const currentQueues = useMemo<Record<string, number>>(() => {
@@ -372,6 +389,18 @@ export function useSimulation() {
     setQueueTimelineOpt(run.replay.station_queues);
     setSummaryOpt(run.replay.summary);
     setAiLog(run.log);
+    setOptimizedSource({ kind: 'laboratorio', ...run.source });
+  }, []);
+
+  /** Bring back the official optimum produced by the agent (scripts/03). */
+  const restoreOfficialOptimum = useCallback(() => {
+    const official = officialOptimumRef.current;
+    if (!official) return;
+    setTrajectoriesOpt(official.trajectories);
+    setQueueTimelineOpt(official.queues);
+    setSummaryOpt(official.summary);
+    setAiLog(official.log);
+    setOptimizedSource({ kind: 'agente' });
   }, []);
 
   return {
@@ -381,6 +410,8 @@ export function useSimulation() {
     summaryOpt,
     aiLog,
     applyAgentRun,
+    restoreOfficialOptimum,
+    optimizedSource,
     simTimeSec,
     durationSec: DURATION_SEC,
     isPlaying,

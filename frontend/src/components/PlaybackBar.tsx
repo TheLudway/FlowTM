@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowCounterClockwise, FastForward, Pause, Play, Rewind } from '@phosphor-icons/react';
+import { MetricTooltip } from './MetricTooltip';
 
 interface PlaybackBarProps {
   simTimeSec: number;
@@ -111,6 +112,11 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
 
       {/* Right: Speed pills selector */}
       <div className="playback-speed-group">
+        <MetricTooltip
+          title="Reloj de la simulación"
+          description="La simulación cubre la hora pico de 06:00 a 09:00. Play/Pausa (barra espaciadora) detiene el tiempo; la barra permite saltar a cualquier minuto (flechas ← → avanzan 10 s, con Shift 1 min)."
+          interpretation="La velocidad 30x recorre las 3 horas en 6 minutos. Pause para inspeccionar una estación o un bus con calma."
+        />
         <span className="speed-group-label">VELOCIDAD:</span>
         <div className="speed-pills">
           {SPEED_OPTIONS.map((spd) => (

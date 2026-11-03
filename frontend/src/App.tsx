@@ -6,6 +6,7 @@ import { InspectorModal } from './components/InspectorModal';
 import { KpiPanel } from './components/KpiPanel';
 import { MapLegend } from './components/MapLegend';
 import { MapViewport } from './components/MapViewport';
+import { MetricTooltip } from './components/MetricTooltip';
 import { PlaybackBar } from './components/PlaybackBar';
 import { useSimulation } from './hooks/useSimulation';
 import type { ActiveView, InterpolatedBus, SelectedEntity, Station, ThemeMode } from './types';
@@ -44,6 +45,8 @@ export const App: React.FC = () => {
     summaryOpt,
     aiLog,
     applyAgentRun,
+    restoreOfficialOptimum,
+    optimizedSource,
     simTimeSec,
     durationSec,
     isPlaying,
@@ -105,6 +108,11 @@ export const App: React.FC = () => {
     return selectedEntity;
   }, [selectedEntity, activeBuses, stations, currentQueues]);
 
+  const followPoint =
+    liveSelectedEntity?.type === 'bus' && !liveSelectedEntity.data?.is_finished
+      ? { lat: liveSelectedEntity.data.lat, lon: liveSelectedEntity.data.lon }
+      : null;
+
   // Allow deep-linking or automated inspection via ?inspect=bus or ?inspect=station
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -147,7 +155,7 @@ export const App: React.FC = () => {
       <Header
         simTimeSec={simTimeSec}
         activeBusesCount={activeBuses.length}
-        totalPassengers={summary?.total_passengers_served || 48899}
+        totalPassengers={summary?.total_passengers_served ?? 0}
         routes={routes}
         selectedRoute={selectedRoute}
         onSelectRoute={setSelectedRoute}
@@ -170,7 +178,12 @@ export const App: React.FC = () => {
               {isSplitView && (
                 <div className="split-view-badge base-badge">
                   <span className="badge-dot" />
-                  <span className="badge-text">ESCENARIO BASE (GTFS VIGENTE)</span>
+                  <span className="badge-text">OPERACIÓN ACTUAL (GTFS)</span>
+                  <MetricTooltip
+                    title="Operación actual"
+                    description="Frecuencias publicadas hoy por TransMilenio en el GTFS para las 18 rutas que cruzan el corredor hacia el sur, con la demanda real de las validaciones."
+                    interpretation="Es el punto de comparación: todo lo que muestra el lado derecho se mide contra este escenario."
+                  />
                 </div>
               )}
               <MapViewport
@@ -183,6 +196,7 @@ export const App: React.FC = () => {
                 selectedEntity={selectedEntity}
                 onSelectEntity={setSelectedEntity}
                 isCameraFollowing={isCameraFollowing}
+                followPoint={followPoint}
                 onStopCameraFollowing={() => setIsCameraFollowing(false)}
               />
             </div>
@@ -192,8 +206,33 @@ export const App: React.FC = () => {
               <div className="map-panel-container optimized-panel">
                 <div className="split-view-badge opt-badge">
                   <span className="badge-dot opt-dot" />
-                  <span className="badge-text">ESCENARIO OPTIMIZADO FLOWTM</span>
-                  <span className="badge-tag">[FLOWTM-SCHEDULER ACTIVO]</span>
+                  {optimizedSource.kind === 'agente' ? (
+                    <>
+                      <span className="badge-text">HORARIO ÓPTIMO DEL AGENTE</span>
+                      <span className="badge-tag">VALIDADO EN 30 SEMILLAS</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="badge-text">PRUEBA DEL LABORATORIO</span>
+                      <span className="badge-tag">
+                        {optimizedSource.algorithm} · {optimizedSource.finishedAt} · ΔU{' '}
+                        {optimizedSource.deltaU >= 0 ? '+' : ''}
+                        {optimizedSource.deltaU.toFixed(4)}
+                      </span>
+                      <button className="badge-restore-btn" onClick={restoreOfficialOptimum}>
+                        Volver al óptimo del agente
+                      </button>
+                    </>
+                  )}
+                  <MetricTooltip
+                    title={optimizedSource.kind === 'agente' ? 'Horario óptimo del agente' : 'Prueba del Laboratorio IA'}
+                    description={
+                      optimizedSource.kind === 'agente'
+                        ? 'Mejor horario encontrado por el agente (recocido simulado) para las 6 rutas que optimiza (H13, H75, H27, J74, K23, L18). Es la solución oficial del proyecto: se validó con 30 simulaciones nuevas.'
+                        : 'Este lado muestra un horario que usted generó en el Laboratorio IA con otros parámetros. No es la solución oficial; use "Volver al óptimo del agente" para restaurarla.'
+                    }
+                    interpretation="Los buses grandes con etiqueta son las 6 rutas que la IA reprograma; los pequeños son las demás rutas, que mantienen su frecuencia GTFS."
+                  />
                 </div>
                 <MapViewport
                   theme={theme}
@@ -205,6 +244,7 @@ export const App: React.FC = () => {
                   selectedEntity={selectedEntity}
                   onSelectEntity={setSelectedEntity}
                   isCameraFollowing={isCameraFollowing}
+                  followPoint={followPoint}
                   onStopCameraFollowing={() => setIsCameraFollowing(false)}
                 />
               </div>
@@ -218,6 +258,9 @@ export const App: React.FC = () => {
               isOpen={isKpiPanelOpen}
               onClose={() => setIsKpiPanelOpen(false)}
               summary={summary}
+              summaryOpt={summaryOpt}
+              activeBusesOptimized={activeBusesOptimized}
+              currentQueuesOptimized={currentQueuesOptimized}
               routes={routes}
               stations={stations}
               activeBuses={activeBuses}
@@ -248,6 +291,7 @@ export const App: React.FC = () => {
               }}
               routes={routes}
               optimizedBuses={activeBusesOptimized}
+              optimizedQueues={currentQueuesOptimized}
               aiLog={aiLog}
               isCameraFollowing={isCameraFollowing}
               onToggleCameraFollow={() => setIsCameraFollowing((prev) => !prev)}
@@ -279,6 +323,8 @@ export const App: React.FC = () => {
             currentQueues={currentQueues}
             currentQueuesOptimized={currentQueuesOptimized}
             simTimeSec={simTimeSec}
+            optimizedSource={optimizedSource}
+            onRestoreOptimum={restoreOfficialOptimum}
           />
         )}
       </main>

@@ -9,6 +9,7 @@ import type {
   ReplayPayload,
   RouteConfig,
 } from '../types';
+import { MetricTooltip } from './MetricTooltip';
 import './AgentLab.css';
 
 type Algorithm = 'recocido_simulado' | 'hill_climbing' | 'busqueda_aleatoria';
@@ -265,6 +266,30 @@ export const AgentLab: React.FC<{
         </div>
       </header>
 
+      <section className="lab-card lab-guide">
+        <h4 className="lab-card-title">¿Qué hace este laboratorio?</h4>
+        <ol className="lab-guide-steps">
+          <li>
+            <b>El problema.</b> TransMilenio tiene un número fijo de buses ({scenario?.flota_base ?? '—'} para estas 6
+            rutas). La IA decide <em>cada cuántos minutos sale un bus</em> de cada ruta para que la gente espere menos y
+            viaje menos apretada, sin comprar buses nuevos.
+          </li>
+          <li>
+            <b>Cómo decide.</b> Prueba un horario, lo simula en el gemelo digital (pasajeros reales de TransMilenio) y le
+            pone una nota, la <em>utilidad U(S)</em>: más alta es mejor. Luego cambia un poco el horario y repite, quedándose
+            con los mejores.
+          </li>
+          <li>
+            <b>Qué puede tocar usted.</b> Qué tan importante es cada objetivo (pesos), cuántos buses hay (cota de flota) y
+            cuánto tiempo busca (presupuesto). Pulse <em>Ejecutar agente</em> y mire la curva verde subir.
+          </li>
+          <li>
+            <b>Cómo saber si funcionó.</b> Al final, el mejor horario se prueba en días simulados que la IA nunca vio. Si
+            la mejora se mantiene, aparece en verde.
+          </li>
+        </ol>
+      </section>
+
       <div className="lab-grid">
         {/* Controls */}
         <section className="lab-card lab-controls">
@@ -273,7 +298,14 @@ export const AgentLab: React.FC<{
           </h4>
 
           <label className="lab-field">
-            <span>Algoritmo</span>
+            <span className="lab-label-help">
+              Algoritmo
+              <MetricTooltip
+                title="Algoritmo de búsqueda"
+                description="Estrategia que usa la IA para explorar horarios. Recocido simulado acepta a veces empeorar para no quedarse atascado; hill climbing solo acepta mejoras; búsqueda aleatoria prueba horarios al azar."
+                interpretation="El recocido simulado es el agente del proyecto: en el experimento fue el único que mejoró de forma significativa (ver Analítica)."
+              />
+            </span>
             <select value={algorithm} onChange={(e) => setAlgorithm(e.target.value as Algorithm)} disabled={status === 'running'}>
               {Object.entries(ALGORITHM_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -284,16 +316,26 @@ export const AgentLab: React.FC<{
           </label>
 
           <label className="lab-field">
-            <span>
+            <span className="lab-label-help">
               Presupuesto <b className="font-mono">{budget}</b> horarios
+              <MetricTooltip
+                title="Presupuesto de búsqueda"
+                description="Cuántos horarios distintos puede probar la IA. Cada uno se simula varias veces (las semillas)."
+                interpretation="Más presupuesto = búsqueda más larga y normalmente mejores resultados. 60 tarda ~30 s; 150 ~80 s."
+              />
             </span>
             <input type="range" min={10} max={scenario?.limites.presupuesto ?? 300} step={10} value={budget}
               onChange={(e) => setBudget(Number(e.target.value))} disabled={status === 'running'} />
           </label>
 
           <label className="lab-field">
-            <span>
+            <span className="lab-label-help">
               Semillas por evaluación <b className="font-mono">{seeds}</b>
+              <MetricTooltip
+                title="Semillas (días simulados)"
+                description="Cada semilla es un día distinto: los pasajeros llegan en momentos diferentes. La nota de un horario es el promedio sobre estas semillas."
+                interpretation="Con 1 semilla la IA puede elegir un horario que solo tuvo suerte ese día; con 5 o más la decisión es más confiable."
+              />
             </span>
             <input type="range" min={1} max={scenario?.limites.semillas ?? 10} value={seeds}
               onChange={(e) => setSeeds(Number(e.target.value))} disabled={status === 'running'} />
@@ -301,7 +343,14 @@ export const AgentLab: React.FC<{
 
           <div className="lab-field-row">
             <label className="lab-field">
-              <span>Paso (min)</span>
+              <span className="lab-label-help">
+                Paso (min)
+                <MetricTooltip
+                  title="Tamaño del paso"
+                  description="Cuántos minutos cambia el intervalo de una ruta en cada movimiento de la IA."
+                  interpretation="Pasos pequeños afinan; pasos grandes exploran más rápido pero con menos precisión."
+                />
+              </span>
               <select value={step} onChange={(e) => setStep(Number(e.target.value))} disabled={status === 'running'}>
                 {[0.25, 0.5, 1, 2].map((v) => (
                   <option key={v} value={v}>
@@ -311,23 +360,42 @@ export const AgentLab: React.FC<{
               </select>
             </label>
             <label className="lab-field">
-              <span>Semilla búsqueda</span>
+              <span className="lab-label-help">
+                Semilla búsqueda
+                <MetricTooltip
+                  title="Semilla de la búsqueda"
+                  description="Fija las decisiones aleatorias de la IA para que el resultado se pueda repetir exactamente."
+                  interpretation="Cámbiela para ver otra corrida independiente del mismo algoritmo."
+                />
+              </span>
               <input type="number" value={searchSeed} onChange={(e) => setSearchSeed(Number(e.target.value))}
                 disabled={status === 'running'} />
             </label>
           </div>
 
           <label className="lab-field">
-            <span>
+            <span className="lab-label-help">
               Cota de flota B<sub>max</sub> <b className="font-mono">{maxFleet ?? '—'}</b>
               {scenario && <em> (operación actual: {scenario.flota_base})</em>}
+              <MetricTooltip
+                title="Cota de flota (sin comprar buses)"
+                description="Número máximo de buses que la IA puede usar en las 6 rutas, contando ida y regreso. El valor por defecto es la flota que TransMilenio usa hoy según el GTFS."
+                interpretation="Bájela para preguntar: ¿qué tan bien se puede operar con menos buses? La IA nunca propone un horario que la exceda."
+              />
             </span>
             <input type="range" min={scenario ? Math.round(scenario.flota_base * 0.7) : 0}
               max={scenario?.flota_base ?? 0} value={maxFleet ?? 0}
               onChange={(e) => setMaxFleet(Number(e.target.value))} disabled={status === 'running' || !scenario} />
           </label>
 
-          <h5 className="lab-subtitle-sm">Pesos de U(S)</h5>
+          <h5 className="lab-subtitle-sm lab-label-help">
+            Pesos de U(S)
+            <MetricTooltip
+              title="Pesos de la utilidad U(S)"
+              description="Qué tan importante es cada objetivo para la nota del horario. Se normalizan para sumar 100%."
+              interpretation="Ejemplo: si sube 'Tiempo de espera', la IA preferirá horarios con menos espera aunque los buses vayan más llenos. Los valores por defecto son los del Avance II."
+            />
+          </h5>
           {(Object.keys(WEIGHT_LABELS) as (keyof Weights)[]).map((key) => (
             <label className="lab-field lab-weight" key={key}>
               <span>
@@ -356,6 +424,11 @@ export const AgentLab: React.FC<{
           <div className="lab-live-header">
             <h4 className="lab-card-title">
               <Lightning size={15} weight="bold" /> Convergencia en vivo
+              <MetricTooltip
+                title="Cómo leer la curva"
+                description="Cada punto es un horario probado. Azul: la nota del horario en el que está la IA. Verde: la mejor nota encontrada hasta ahora (nunca baja). Gris: horarios rechazados."
+                interpretation="Al inicio la IA acepta empeorar para explorar (temperatura alta); al final solo acepta mejoras. Si la línea verde deja de subir, la búsqueda convergió."
+              />
             </h4>
             {status !== 'idle' && (
               <span className="lab-progress-label font-mono tabular-nums">
@@ -439,14 +512,32 @@ export const AgentLab: React.FC<{
         <section className="lab-card lab-result">
           <div className="lab-result-header">
             <div>
-              <h4 className="lab-card-title">Resultado · {ALGORITHM_LABELS[result.algoritmo as Algorithm] ?? result.algoritmo}</h4>
+              <h4 className="lab-card-title">
+                Resultado · {ALGORITHM_LABELS[result.algoritmo as Algorithm] ?? result.algoritmo}
+                <MetricTooltip
+                  title="Resultado y validación"
+                  description="El mejor horario encontrado se vuelve a simular en 10 días que la IA nunca vio y se compara, día por día, con la operación actual."
+                  interpretation="Verde: mejora confirmada (el intervalo de confianza al 95% no incluye el cero). Rojo: empeora de forma confirmada. Gris: no se puede afirmar que cambie."
+                />
+              </h4>
               <p className="lab-subtitle">
                 Entrenamiento ({seeds} semillas): ΔU = <b className="font-mono">{fmtSigned(result.delta_utilidad, 4)}</b> ·{' '}
                 {result.evaluaciones} horarios evaluados · flota {result.inicial.fleet_used} → {result.mejor.fleet_used}
               </p>
             </div>
             <button className="lab-run-btn secondary"
-              onClick={() => onShowOnMap({ replay: result.replay, log: toLog(scenario, result, history, maxFleet ?? scenario.flota_maxima) })}>
+              onClick={() =>
+                onShowOnMap({
+                  replay: result.replay,
+                  log: toLog(scenario, result, history, maxFleet ?? scenario.flota_maxima),
+                  source: {
+                    algorithm: ALGORITHM_LABELS[result.algoritmo as Algorithm] ?? result.algoritmo,
+                    finishedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+                    deltaU: result.validacion.utilidad.diferencia,
+                    validated: result.validacion.utilidad.significativo && result.validacion.utilidad.mejora,
+                  },
+                })
+              }>
               <MapTrifold size={15} weight="bold" /> Ver en el mapa comparativo
             </button>
           </div>
