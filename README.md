@@ -70,7 +70,7 @@ Resultados reproducibles de `scripts/03_optimizar_frecuencias.py` (30 iteracione
 | **Entregable** | Horarios estáticos | `frequencies.txt` | Estándar GTFS |
 
 > [!NOTE]
-> **Lectura de los resultados.** El agente libera 14 buses manteniendo prácticamente el mismo volumen transportado y reduciendo la espera media un 6.1%. La mejora es moderada: la meta del Avance II de reducir la espera en ≥ 15% **aún no se alcanza**, y los pasajeros varados al corte aumentan ligeramente (+3.8%).
+> **Lectura de los resultados.** El agente libera 14 buses manteniendo prácticamente el mismo volumen transportado. La espera media baja un 6.1% con la semilla de optimización, pero solo un **1.9% en promedio sobre 30 semillas** (IC 95% de la diferencia: [−0.093, −0.042] min; `scripts/04_validar_robustez.py`). La meta del Avance II de reducir la espera en ≥ 15% **aún no se alcanza**, y los pasajeros varados al corte aumentan ligeramente (+3.8%).
 >
 > **Flota física vs. despachos.** La flota física (92 buses) es el número de vehículos distintos necesarios para sostener los intervalos. Como cada bus completa varios ciclos en las 3 horas, el escenario optimizado registra **354 despachos** (420 en el escenario base).
 
@@ -125,6 +125,9 @@ uv run python scripts/03_optimizar_frecuencias.py
 
 # Paso 4: Exportar la telemetría y los resultados al frontend (frontend/public/data)
 uv run python scripts/export_frontend_data.py
+
+# (Opcional) Validar la robustez del horario optimizado con 30 semillas Monte Carlo
+uv run python scripts/04_validar_robustez.py
 ```
 
 ### 3. Iniciar el Centro de Control de Operaciones (OCC)
