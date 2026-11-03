@@ -13,10 +13,60 @@ import {
 import { MetricTooltip } from './MetricTooltip';
 import type { InterpolatedBus, RouteConfig, Station, SummaryKPIs } from '../types';
 
+/** One base-vs-optimized KPI row; lower values are better for every metric shown. */
+const CompareCard: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  tooltip: { title: string; description: string; interpretation?: string };
+  base: number | undefined;
+  optimized: number | undefined;
+  digits: number;
+  unit: string;
+}> = ({ title, icon, tooltip, base, optimized, digits, unit }) => {
+  const fmt = (v: number | undefined) => (v === undefined ? '—' : `${v.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits })}${unit}`);
+  const delta = base !== undefined && optimized !== undefined ? optimized - base : undefined;
+  const pct = delta !== undefined && base ? (delta / base) * 100 : undefined;
+  const better = delta !== undefined && delta < 0;
+  const worse = delta !== undefined && delta > 0;
+  return (
+    <div className="comp-kpi-card">
+      <div className="comp-kpi-header">
+        <div className="comp-title-group">
+          <span className="comp-kpi-title">{title}</span>
+          <MetricTooltip {...tooltip} />
+        </div>
+        {icon}
+      </div>
+      <div className="comp-kpi-values">
+        <div className="comp-val-col">
+          <span className="col-tag base-tag">ACTUAL (GTFS)</span>
+          <span className="col-num font-mono tabular-nums">{fmt(base)}</span>
+        </div>
+        <div className="comp-delta-col">
+          {better && <TrendDown size={18} color="var(--accent-green)" />}
+          {worse && <TrendUp size={18} color="var(--accent-red)" />}
+          <span className="delta-num">
+            {pct === undefined ? (delta === 0 ? '0%' : '—') : `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`}
+          </span>
+        </div>
+        <div className="comp-val-col">
+          <span className="col-tag opt-tag">AGENTE IA</span>
+          <span className={`col-num font-mono tabular-nums ${better ? 'text-success' : worse ? 'text-alert' : ''}`}>
+            {fmt(optimized)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface KpiPanelProps {
   isOpen: boolean;
   onClose: () => void;
   summary: SummaryKPIs | null;
+  summaryOpt?: SummaryKPIs | null;
+  activeBusesOptimized?: InterpolatedBus[];
+  currentQueuesOptimized?: Record<string, number>;
   routes: RouteConfig[];
   stations: Station[];
   activeBuses: InterpolatedBus[];
@@ -30,6 +80,9 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
   isOpen,
   onClose,
   summary,
+  summaryOpt = null,
+  activeBusesOptimized = [],
+  currentQueuesOptimized = {},
   routes: _routes,
   stations,
   activeBuses,
@@ -54,9 +107,11 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
   // Total waiting queue across all corridor stations right now
   const totalWaitingPax = Object.values(currentQueues).reduce((acc, q) => acc + q, 0);
 
-  // Optimized scenario projection
-  const optWaitingPax = Math.round(totalWaitingPax * 0.62);
-  const optOvercrowded = Math.max(0, Math.round(overcrowdedBuses * 0.22));
+  // Optimized scenario: real telemetry of the right-hand map at the same instant.
+  const totalWaitingPaxOpt = Object.values(currentQueuesOptimized).reduce((acc, q) => acc + q, 0);
+  const overcrowdedBusesOpt = activeBusesOptimized.filter((b) => b.occupancy_pct >= 85).length;
+  const bunchingBuses = activeBuses.filter((b) => b.is_bunching).length;
+  const bunchingBusesOpt = activeBusesOptimized.filter((b) => b.is_bunching).length;
 
   // Sort stations by current queue size descending
   const stationsWithQueues = stations.map((s) => ({
@@ -90,148 +145,65 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
 
       <div className="kpi-panel-body">
         {isSplitView ? (
-          /* COMPARATIVE TELEMETRY MODE (SPLIT SCREEN) */
+          /* COMPARATIVE TELEMETRY MODE (SPLIT SCREEN): real data of both scenarios */
           <div className="kpi-comparative-section">
             <div className="split-kpi-banner">
               <Sparkle size={15} weight="fill" color="var(--accent-yellow)" />
-              <span>Contraste de indicadores clave en tiempo real</span>
+              <span>Operación actual vs. horario del agente (mismo instante)</span>
             </div>
 
-            {/* Metric 1: Wait Time */}
-            <div className="comp-kpi-card">
-              <div className="comp-kpi-header">
-                <div className="comp-title-group">
-                  <span className="comp-kpi-title">TIEMPO MEDIO DE ESPERA</span>
-                  <MetricTooltip
-                    title="Tiempo Medio de Espera"
-                    description="Minutos promedio que un usuario aguarda en plataforma antes de poder abordar un bus."
-                    interpretation="Valores mayores a 4.5 minutos indican déficit de frecuencia o emparejamiento de buses."
-                    flowtmGoal="Reducir la espera mediante sincronización de despachos."
-                  />
-                </div>
-                <Clock size={16} color="var(--accent-blue)" />
-              </div>
-              <div className="comp-kpi-values">
-                <div className="comp-val-col">
-                  <span className="col-tag base-tag">GTFS BASE</span>
-                  <span className="col-num font-mono tabular-nums">
-                    {summary ? summary.avg_waiting_time_min.toFixed(2) : '—'} min
-                  </span>
-                </div>
-                <div className="comp-delta-col">
-                  <TrendDown size={18} color="var(--accent-green)" />
-                  <span className="delta-num">-24.5%</span>
-                </div>
-                <div className="comp-val-col">
-                  <span className="col-tag opt-tag">FLOWTM IA</span>
-                  <span className="col-num font-mono tabular-nums text-success">
-                    2.77 min
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Metric 2: Overcrowded Buses */}
-            <div className="comp-kpi-card">
-              <div className="comp-kpi-header">
-                <div className="comp-title-group">
-                  <span className="comp-kpi-title">BUSES CON SOBRECUPO (&ge;85%)</span>
-                  <MetricTooltip
-                    title="Buses en Sobrecupo Crítico"
-                    description="Flota operando con ocupación mayor al 85% de su capacidad máxima (160 para articulados, 250 para biarticulados)."
-                    interpretation="Genera demoras en plataforma al bloquear las puertas de abordaje."
-                    flowtmGoal="Distribuir la demanda y suprimir el hacinamiento en hora pico."
-                  />
-                </div>
-                <Warning size={16} color="var(--accent-red)" />
-              </div>
-              <div className="comp-kpi-values">
-                <div className="comp-val-col">
-                  <span className="col-tag base-tag">GTFS BASE</span>
-                  <span className="col-num font-mono tabular-nums text-alert">
-                    {overcrowdedBuses} buses
-                  </span>
-                </div>
-                <div className="comp-delta-col">
-                  <TrendDown size={18} color="var(--accent-green)" />
-                  <span className="delta-num">-78%</span>
-                </div>
-                <div className="comp-val-col">
-                  <span className="col-tag opt-tag">FLOWTM IA</span>
-                  <span className="col-num font-mono tabular-nums text-success">
-                    {optOvercrowded} buses
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Metric 3: Platform Queue */}
-            <div className="comp-kpi-card">
-              <div className="comp-kpi-header">
-                <div className="comp-title-group">
-                  <span className="comp-kpi-title">PASAJEROS EN ESPERA EN ANDÉN</span>
-                  <MetricTooltip
-                    title="Cola Global en Estaciones"
-                    description={`Total de usuarios esperando bus simultáneamente en las ${stations.length} estaciones del corredor.`}
-                    interpretation="Picos superiores a 1,200 pax provocan saturación en torniquetes y accesos peatonales."
-                    flowtmGoal="Evacuar andenes de manera continua mediante inyecciones oportunas de flota."
-                  />
-                </div>
-                <Users size={16} color="var(--accent-green)" />
-              </div>
-              <div className="comp-kpi-values">
-                <div className="comp-val-col">
-                  <span className="col-tag base-tag">GTFS BASE</span>
-                  <span className="col-num font-mono tabular-nums">
-                    {totalWaitingPax.toLocaleString()} pax
-                  </span>
-                </div>
-                <div className="comp-delta-col">
-                  <TrendDown size={18} color="var(--accent-green)" />
-                  <span className="delta-num">-38%</span>
-                </div>
-                <div className="comp-val-col">
-                  <span className="col-tag opt-tag">FLOWTM IA</span>
-                  <span className="col-num font-mono tabular-nums text-success">
-                    {optWaitingPax.toLocaleString()} pax
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Metric 4: Headway Regularity */}
-            <div className="comp-kpi-card">
-              <div className="comp-kpi-header">
-                <div className="comp-title-group">
-                  <span className="comp-kpi-title">REGULARIDAD DE INTERVALOS</span>
-                  <MetricTooltip
-                    title="Índice de Regularidad de Headways"
-                    description="Porcentaje de despachos que cumplen el intervalo programado sin desviaciones excesivas."
-                    interpretation="Mayor regularidad = menos bus bunching y tiempos de espera predecibles."
-                    flowtmGoal="Aumentar la regularidad al 91% en todo el corredor."
-                  />
-                </div>
-                <CheckCircle size={16} color="var(--accent-green)" />
-              </div>
-              <div className="comp-kpi-values">
-                <div className="comp-val-col">
-                  <span className="col-tag base-tag">GTFS BASE</span>
-                  <span className="col-num font-mono tabular-nums">
-                    64.2%
-                  </span>
-                </div>
-                <div className="comp-delta-col">
-                  <TrendUp size={18} color="var(--accent-green)" />
-                  <span className="delta-num">+26.8%</span>
-                </div>
-                <div className="comp-val-col">
-                  <span className="col-tag opt-tag">FLOWTM IA</span>
-                  <span className="col-num font-mono tabular-nums text-success">
-                    91.0%
-                  </span>
-                </div>
-              </div>
-            </div>
+            <CompareCard
+              title="TIEMPO MEDIO DE ESPERA (3 H)"
+              icon={<Clock size={16} color="var(--accent-blue)" />}
+              tooltip={{
+                title: 'Tiempo medio de espera',
+                description: 'Minutos promedio que un pasajero espera en el andén antes de abordar, en toda la simulación de 06:00 a 09:00.',
+                interpretation: 'Es un valor de toda la corrida (no cambia con el reloj). La validación con 30 semillas está en Analítica.',
+              }}
+              base={summary?.avg_waiting_time_min}
+              optimized={summaryOpt?.avg_waiting_time_min}
+              digits={2}
+              unit=" min"
+            />
+            <CompareCard
+              title="BUSES CON OCUPACIÓN ≥ 85% (AHORA)"
+              icon={<Warning size={16} color="var(--accent-red)" />}
+              tooltip={{
+                title: 'Buses muy llenos en este instante',
+                description: 'Buses en circulación con más del 85% de su capacidad (aro rojo en el mapa).',
+                interpretation: 'Cambia con el reloj de la simulación. Menos es mejor.',
+              }}
+              base={overcrowdedBuses}
+              optimized={overcrowdedBusesOpt}
+              digits={0}
+              unit=" buses"
+            />
+            <CompareCard
+              title="PASAJEROS EN ANDÉN (AHORA)"
+              icon={<Users size={16} color="var(--accent-green)" />}
+              tooltip={{
+                title: 'Pasajeros esperando',
+                description: `Total de personas esperando bus en las ${stations.length} estaciones del corredor en este instante.`,
+                interpretation: 'Cambia con el reloj de la simulación. Menos es mejor.',
+              }}
+              base={totalWaitingPax}
+              optimized={totalWaitingPaxOpt}
+              digits={0}
+              unit=" pax"
+            />
+            <CompareCard
+              title="BUSES PEGADOS / BUNCHING (AHORA)"
+              icon={<CheckCircle size={16} color="var(--accent-yellow)" />}
+              tooltip={{
+                title: 'Buses pegados (bunching)',
+                description: 'Buses de la misma ruta a menos de 420 m entre sí (doble aro naranja en el mapa).',
+                interpretation: 'Indica intervalos irregulares: un bus llega lleno y el siguiente casi vacío. Menos es mejor.',
+              }}
+              base={bunchingBuses}
+              optimized={bunchingBusesOpt}
+              digits={0}
+              unit=" buses"
+            />
           </div>
         ) : (
           /* SINGLE-VIEW TELEMETRY (STANDARD DASHBOARD) */
