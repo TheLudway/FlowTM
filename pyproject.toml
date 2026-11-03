@@ -15,10 +15,13 @@ requires-python = ">=3.12"
 dependencies = [
     "marimo>=0.17.6",
     "pandas>=3.0.5",
+    "plotly>=7.0.0",
     "polars>=1.36.1",
     "pyarrow>=25.0.1",
+    "pydeck>=0.9.3",
     "ruff>=0.16.4",
     "simpy>=4.1.2",
+    "streamlit>=1.63.0",
 ]
 
 [project.scripts]

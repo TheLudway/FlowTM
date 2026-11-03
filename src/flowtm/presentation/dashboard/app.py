@@ -15,11 +15,15 @@ import streamlit as st
 from flowtm.domain.state import ScheduleState
 from flowtm.infrastructure.repositories.data_repository import ParquetDataRepository
 from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
-from flowtm.simulation.engine import SimuladorCorredor
+from flowtm.presentation.dashboard.incidents import (
+    aggregate_bus_incidents,
+    aggregate_station_incidents,
+)
+from flowtm.simulation.engine import CorridorSimulator
 
 ROOT_DIR = Path(__file__).resolve().parents[4]
 
-escenario_dir = ROOT_DIR / "data/scenarios/piloto"
+scenario_dir = ROOT_DIR / "data/scenarios/piloto"
 
 st.set_page_config(
     page_title="FlowTM - OCC Digital Twin",
@@ -144,7 +148,7 @@ def get_repository(scenario_path):
 # -----------------
 with st.sidebar:
     st.markdown("### 🎛️ Centro de Control (OCC)")
-    franja_opcion = st.selectbox(
+    time_slot_option = st.selectbox(
         "Ventana Operativa",
         [
             "06:00 - 09:00 (Hora Pico Mañana)",
@@ -154,91 +158,89 @@ with st.sidebar:
         ],
     )
 
-    if "Mañana" in franja_opcion:
-        hora_ini, hora_fin = 6, 9
-    elif "Mediodía" in franja_opcion:
-        hora_ini, hora_fin = 11, 14
-    elif "Tarde" in franja_opcion:
-        hora_ini, hora_fin = 17, 20
+    if "Mañana" in time_slot_option:
+        start_hour, end_hour = 6, 9
+    elif "Mediodía" in time_slot_option:
+        start_hour, end_hour = 11, 14
+    elif "Tarde" in time_slot_option:
+        start_hour, end_hour = 17, 20
     else:
-        hora_ini, hora_fin = 4, 23
+        start_hour, end_hour = 4, 23
 
-    frecuencias_oficiales = {"B10": 4.5, "B27": 6.0, "H20": 5.0}
+    official_headways = {"B10": 4.5, "B27": 6.0, "H20": 5.0}
 
-    btn_correr = st.button(
+    run_sim_btn = st.button(
         "🚦 Iniciar Simulación Oficial GTFS", use_container_width=True, type="primary"
     )
 
     st.divider()
     st.markdown("### 🧠 Motor IA (Simulated Annealing)")
-    activar_ia = st.toggle("Activar Agente Racional (FlowTM)", value=False)
-    btn_optimizar = (
+    enable_ai = st.toggle("Activar Agente Racional (FlowTM)", value=False)
+    optimize_btn = (
         st.button("⚡ Ejecutar Optimización", use_container_width=True)
-        if activar_ia
+        if enable_ai
         else False
     )
 
 # -----------------
 # SIMULATION EXECUTION
 # -----------------
-if btn_correr or "resultado_base" not in st.session_state:
+if run_sim_btn or "base_result" not in st.session_state:
     with st.spinner(
-        f"Simulando operaciones base ({hora_ini:02d}:00 - {hora_fin:02d}:00)..."
+        f"Simulando operaciones base ({start_hour:02d}:00 - {end_hour:02d}:00)..."
     ):
-        simulador = SimuladorCorredor(escenario_dir)
-        res_base = simulador.simular(
-            frecuencias_oficiales, hora_inicio=hora_ini, hora_fin=hora_fin
+        simulator = CorridorSimulator(scenario_dir)
+        base_result = simulator.simulate(
+            official_headways, start_hour=start_hour, end_hour=end_hour
         )
-        simulador.collector.exportar_telemetria(escenario_dir / "telemetria_base")
-        st.session_state["resultado_base"] = res_base
-        st.session_state["hora_ini"] = hora_ini
-        st.session_state["hora_fin"] = hora_fin
-        st.session_state["ia_ejecutada"] = False
+        simulator.collector.export_telemetry(scenario_dir / "telemetria_base")
+        st.session_state["base_result"] = base_result
+        st.session_state["start_hour"] = start_hour
+        st.session_state["end_hour"] = end_hour
+        st.session_state["ai_executed"] = False
         st.rerun()
 
-if btn_optimizar:
+if optimize_btn:
     with st.spinner(
-        f"Agente Racional optimizando frecuencias ({hora_ini:02d}:00 - {hora_fin:02d}:00)..."
+        f"Agente Racional optimizando frecuencias ({start_hour:02d}:00 - {end_hour:02d}:00)..."
     ):
-        optimizador = SimulatedAnnealingOptimizer(
-            escenario_dir, iteraciones=20, temp_inicial=50.0, cooling_rate=0.88
+        optimizer = SimulatedAnnealingOptimizer(
+            scenario_dir, iterations=20, initial_temp=50.0, cooling_rate=0.88
         )
-        mejor_estado, _ = optimizador.optimizar(
-            ScheduleState(frecuencias=frecuencias_oficiales)
-        )
+        best_state, _ = optimizer.optimize(ScheduleState(headways=official_headways))
 
-        sim_opt = SimuladorCorredor(escenario_dir)
-        res_opt = sim_opt.simular(
-            mejor_estado.frecuencias, hora_inicio=hora_ini, hora_fin=hora_fin
+        opt_simulator = CorridorSimulator(scenario_dir)
+        opt_result = opt_simulator.simulate(
+            best_state.headways, start_hour=start_hour, end_hour=end_hour
         )
-        sim_opt.collector.exportar_telemetria(escenario_dir / "telemetria_opt")
+        opt_simulator.collector.export_telemetry(scenario_dir / "telemetria_opt")
 
-        st.session_state["resultado_opt"] = res_opt
-        st.session_state["mejor_estado"] = mejor_estado
-        st.session_state["ia_ejecutada"] = True
+        st.session_state["opt_result"] = opt_result
+        st.session_state["best_state"] = best_state
+        st.session_state["ai_executed"] = True
         st.rerun()
 
 # -----------------
 # DASHBOARD STATE PREP (VIA REPOSITORY)
 # -----------------
-res_base = st.session_state["resultado_base"]
-h_ini = st.session_state["hora_ini"]
-h_fin = st.session_state["hora_fin"]
-ia_activa = st.session_state.get("ia_ejecutada", False)
+base_result = st.session_state["base_result"]
+session_start_hour = st.session_state["start_hour"]
+session_end_hour = st.session_state["end_hour"]
+is_ai_active = st.session_state.get("ai_executed", False)
 
-repo = get_repository(escenario_dir)
-df_topo = repo.get_topology()
+repository = get_repository(scenario_dir)
+topology_df = repository.get_topology()
 
-if ia_activa:
-    buses_df, colas_df = repo.get_telemetry("opt")
+if is_ai_active:
+    buses_df, queues_df = repository.get_telemetry("opt")
     mode_label = "🟢 Escenario Optimizado (FlowTM IA)"
 else:
-    buses_df, colas_df = repo.get_telemetry("base")
+    buses_df, queues_df = repository.get_telemetry("base")
     mode_label = "🔴 Escenario Oficial (GTFS Actual)"
 
-if buses_df is not None and colas_df is not None and len(buses_df) > 0:
-    min_time = float(buses_df["tiempo_seg"].min())
-    max_time = float(buses_df["tiempo_seg"].max())
+if buses_df is not None and queues_df is not None and len(buses_df) > 0:
+    min_time = float(buses_df["time_sec"].min())
+    max_time = float(buses_df["time_sec"].max())
 
     # --- MASTER CLOCK & SCRUBBER ---
     st.markdown(
@@ -246,7 +248,7 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
         unsafe_allow_html=True,
     )
 
-    dt_start = datetime.datetime(2023, 1, 1, h_ini, 0, 0)
+    dt_start = datetime.datetime(2023, 1, 1, session_start_hour, 0, 0)
     min_dt = dt_start + datetime.timedelta(seconds=min_time)
     max_dt = dt_start + datetime.timedelta(seconds=max_time)
 
@@ -321,38 +323,38 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
 
     # --- REAL-TIME DATA FILTERING (Instant t) ---
     # We look back up to 90 seconds to catch the latest telemetry broadcast
-    df_buses_curr = buses_df[
-        (buses_df["tiempo_seg"] <= current_time)
-        & (buses_df["tiempo_seg"] >= current_time - 90.0)
-    ].drop_duplicates(subset=["id_bus"], keep="last")
+    current_buses_df = buses_df[
+        (buses_df["time_sec"] <= current_time)
+        & (buses_df["time_sec"] >= current_time - 90.0)
+    ].drop_duplicates(subset=["bus_id"], keep="last")
 
-    df_colas_curr = colas_df[
-        (colas_df["tiempo_seg"] <= current_time)
-        & (colas_df["tiempo_seg"] >= current_time - 90.0)
-    ].drop_duplicates(subset=["codigo_estacion"], keep="last")
+    current_queues_df = queues_df[
+        (queues_df["time_sec"] <= current_time)
+        & (queues_df["time_sec"] >= current_time - 90.0)
+    ].drop_duplicates(subset=["station_code"], keep="last")
 
-    st_data = pd.merge(
-        df_topo,
-        df_colas_curr[["codigo_estacion", "cola_pasajeros"]],
+    station_data = pd.merge(
+        topology_df,
+        current_queues_df[["station_code", "queue_size"]],
         left_on="codigo",
-        right_on="codigo_estacion",
+        right_on="station_code",
         how="left",
     )
-    st_data["cola"] = st_data["cola_pasajeros"].fillna(0)
+    station_data["queue_size"] = station_data["queue_size"].fillna(0)
 
     # --- INSTANTANEOUS KPIs ---
-    active_buses = len(df_buses_curr)
-    total_stranded = int(st_data["cola"].sum())
+    active_buses = len(current_buses_df)
+    total_stranded = int(station_data["queue_size"].sum())
     mean_occupancy = (
-        (df_buses_curr["pasajeros"].mean() / 160.0) * 100 if active_buses > 0 else 0
+        (current_buses_df["passengers"].mean() / 160.0) * 100 if active_buses > 0 else 0
     )
 
     critical_station = "N/A"
     critical_val = 0
     if total_stranded > 0:
-        crit_row = st_data.loc[st_data["cola"].idxmax()]
-        critical_station = crit_row["nombre"]
-        critical_val = int(crit_row["cola"])
+        critical_row = station_data.loc[station_data["queue_size"].idxmax()]
+        critical_station = critical_row["nombre"]
+        critical_val = int(critical_row["queue_size"])
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🚌 Flota Activa en Vía", f"{active_buses} buses")
@@ -368,7 +370,7 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # --- DEEP ANALYTICS TABS ---
-    tab_map, tab_bus, tab_estaciones, tab_ia = st.tabs(
+    tab_map, tab_bus, tab_stations, tab_ia = st.tabs(
         [
             "🗺️ Gemelo Digital en Vivo & Monitor",
             "🚍 Perfil de Carga y Flota",
@@ -383,15 +385,15 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
 
         with col_map:
             # Map Infrastructure Layer
-            df_topo_sorted = (
-                df_topo.sort_values(by=["secuencia"])
-                if "secuencia" in df_topo.columns
-                else df_topo
+            sorted_topology_df = (
+                topology_df.sort_values(by=["secuencia"])
+                if "secuencia" in topology_df.columns
+                else topology_df
             )
             path_data = pd.DataFrame(
                 [
                     {
-                        "path": df_topo_sorted[["lon", "lat"]].values.tolist(),
+                        "path": sorted_topology_df[["lon", "lat"]].values.tolist(),
                         "color": [255, 255, 255, 90],
                     }
                 ]
@@ -414,21 +416,21 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
             }
             bus_layer = None
             if active_buses > 0:
-                df_buses_curr["color"] = df_buses_curr["ruta"].map(
+                current_buses_df["color"] = current_buses_df["route"].map(
                     lambda x: route_colors.get(x, [255, 204, 0, 255])
                 )
-                df_buses_curr["radius"] = df_buses_curr["pasajeros"].apply(
+                current_buses_df["radius"] = current_buses_df["passengers"].apply(
                     lambda p: min(250, max(60, (p / 160.0) * 200))
                 )
-                df_buses_curr["tooltip_text"] = df_buses_curr.apply(
+                current_buses_df["tooltip_text"] = current_buses_df.apply(
                     lambda r: (
-                        f"🚍 Bus {r['id_bus']} ({r['ruta']})\nCarga: {r['pasajeros']}/160 pax ({(r['pasajeros'] / 160) * 100:.1f}%)"
+                        f"🚍 Bus {r['bus_id']} ({r['route']})\nCarga: {r['passengers']}/160 pax ({(r['passengers'] / 160) * 100:.1f}%)"
                     ),
                     axis=1,
                 )
                 bus_layer = pdk.Layer(
                     "ScatterplotLayer",
-                    data=df_buses_curr.dropna(subset=["lat", "lon"]),
+                    data=current_buses_df.dropna(subset=["lat", "lon"]),
                     get_position=["lon", "lat"],
                     get_color="color",
                     get_radius="radius",
@@ -440,26 +442,27 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 )
 
             # Map Stations Layer
-            def q_color(q):
-                if q < 50:
+            def get_queue_color(queue_size: float) -> list[int]:
+                """Return RGBA color based on queue size thresholds."""
+                if queue_size < 50:
                     return [67, 160, 71, 150]
-                if q < 150:
+                if queue_size < 150:
                     return [251, 140, 0, 180]
                 return [229, 57, 53, 220]
 
-            st_data["color"] = st_data["cola"].apply(q_color)
-            st_data["radius"] = st_data["cola"].apply(
-                lambda q: min(600, max(120, q * 3.5))
+            station_data["color"] = station_data["queue_size"].apply(get_queue_color)
+            station_data["radius"] = station_data["queue_size"].apply(
+                lambda queue_size: min(600, max(120, queue_size * 3.5))
             )
-            st_data["tooltip_text"] = st_data.apply(
+            station_data["tooltip_text"] = station_data.apply(
                 lambda r: (
-                    f"🚉 Estación {r['nombre']}\nDemanda Q(t): {int(r['cola'])} pax"
+                    f"🚉 Estación {r['nombre']}\nDemanda Q(t): {int(r['queue_size'])} pax"
                 ),
                 axis=1,
             )
             station_layer = pdk.Layer(
                 "ScatterplotLayer",
-                data=st_data,
+                data=station_data,
                 get_position=["lon", "lat"],
                 get_color="color",
                 get_radius="radius",
@@ -471,8 +474,8 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 layers.append(bus_layer)
 
             view_state = pdk.ViewState(
-                latitude=df_topo["lat"].mean(),
-                longitude=df_topo["lon"].mean(),
+                latitude=topology_df["lat"].mean(),
+                longitude=topology_df["lon"].mean(),
                 zoom=11.5,
                 pitch=40,
             )
@@ -531,13 +534,13 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
             st.markdown("<div class='incident-panel'>", unsafe_allow_html=True)
             # 1. Collapse Monitor (Q > 150)
             st.markdown("#### 🚉 Estaciones Colapsadas")
-            alert_stations = st_data[st_data["cola"] >= 150].sort_values(
-                by="cola", ascending=False
-            )
+            alert_stations = station_data[
+                station_data["queue_size"] >= 150
+            ].sort_values(by="queue_size", ascending=False)
             if len(alert_stations) > 0:
                 for _, r in alert_stations.iterrows():
                     st.markdown(
-                        f"<div class='incident-item'><b>{r['nombre']}</b>: {int(r['cola'])} pasajeros esperando evacuación.</div>",
+                        f"<div class='incident-item'><b>{r['nombre']}</b>: {int(r['queue_size'])} pasajeros esperando evacuación.</div>",
                         unsafe_allow_html=True,
                     )
             else:
@@ -552,20 +555,20 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 unsafe_allow_html=True,
             )
             if active_buses > 0:
-                full_buses = df_buses_curr[
-                    df_buses_curr["pasajeros"] >= 152
-                ].sort_values(by="pasajeros", ascending=False)
+                full_buses = current_buses_df[
+                    current_buses_df["passengers"] >= 152
+                ].sort_values(by="passengers", ascending=False)
                 if len(full_buses) > 0:
                     for _, r in full_buses.iterrows():
                         color = (
                             "#42A5F5"
-                            if r["ruta"] == "B10"
+                            if r["route"] == "B10"
                             else "#66BB6A"
-                            if r["ruta"] == "B27"
+                            if r["route"] == "B27"
                             else "#EF5350"
                         )
                         st.markdown(
-                            f"<div class='incident-item'><span style='color:{color}; font-weight:bold;'>{r['ruta']}</span> (ID: {r['id_bus']}): {r['pasajeros']}/160 pax ({(r['pasajeros'] / 160) * 100:.1f}%)</div>",
+                            f"<div class='incident-item'><span style='color:{color}; font-weight:bold;'>{r['route']}</span> (ID: {r['bus_id']}): {r['passengers']}/160 pax ({(r['passengers'] / 160) * 100:.1f}%)</div>",
                             unsafe_allow_html=True,
                         )
                 else:
@@ -589,44 +592,46 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
             "Auditoría agregada de todos los eventos críticos ocurridos durante la franja operativa simulada, aislando los picos máximos de saturación para evitar analizar minuto a minuto."
         )
 
-        col_hist_est, col_hist_bus = st.columns(2)
+        col_station_history, col_bus_history = st.columns(2)
 
-        with col_hist_est:
+        with col_station_history:
             st.markdown("#### 🚉 Colapsos en Andén (Q > 150 pax)")
             # Aggregate station incidents
-            df_incidentes_est = colas_df[colas_df["cola_pasajeros"] >= 150].copy()
-            if len(df_incidentes_est) > 0:
-                hist_est = (
-                    df_incidentes_est.groupby("codigo_estacion")
-                    .agg(
-                        Pico_Maximo=("cola_pasajeros", "max"),
-                        Inicio_Colapso=("tiempo_seg", "min"),
-                        Fin_Colapso=("tiempo_seg", "max"),
-                    )
-                    .reset_index()
-                )
-                hist_est = pd.merge(
-                    hist_est,
-                    df_topo[["codigo", "nombre"]],
-                    left_on="codigo_estacion",
+            station_history = aggregate_station_incidents(
+                pl.from_pandas(queues_df)
+            ).to_pandas()
+            if len(station_history) > 0:
+                station_history = pd.merge(
+                    station_history,
+                    topology_df[["codigo", "nombre"]],
+                    left_on="station_code",
                     right_on="codigo",
                     how="left",
                 )
-                hist_est["Inicio_Colapso"] = hist_est["Inicio_Colapso"].apply(
+                station_history["collapse_start"] = station_history[
+                    "collapse_start"
+                ].apply(
                     lambda s: (dt_start + datetime.timedelta(seconds=s)).strftime(
                         "%I:%M:%S %p"
                     )
                 )
-                hist_est["Fin_Colapso"] = hist_est["Fin_Colapso"].apply(
+                station_history["collapse_end"] = station_history["collapse_end"].apply(
                     lambda s: (dt_start + datetime.timedelta(seconds=s)).strftime(
                         "%I:%M:%S %p"
                     )
                 )
-                hist_est = hist_est[
-                    ["nombre", "Pico_Maximo", "Inicio_Colapso", "Fin_Colapso"]
-                ].rename(columns={"nombre": "Estación", "Pico_Maximo": "Máx Pasajeros"})
+                station_history = station_history[
+                    ["nombre", "peak_queue", "collapse_start", "collapse_end"]
+                ].rename(
+                    columns={
+                        "nombre": "Estación",
+                        "peak_queue": "Máx Pasajeros",
+                        "collapse_start": "Inicio Colapso",
+                        "collapse_end": "Fin Colapso",
+                    }
+                )
                 st.dataframe(
-                    hist_est.sort_values(by="Máx Pasajeros", ascending=False),
+                    station_history.sort_values(by="Máx Pasajeros", ascending=False),
                     hide_index=True,
                     use_container_width=True,
                 )
@@ -635,46 +640,41 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                     "Operación Perfecta: Ninguna estación superó el umbral de 150 pasajeros en todo el escenario."
                 )
 
-        with col_hist_bus:
+        with col_bus_history:
             st.markdown("#### 🚍 Sobrecupos de Flota (Carga > 95%)")
-            df_incidentes_bus = buses_df[buses_df["pasajeros"] >= 152].copy()
-            if len(df_incidentes_bus) > 0:
-                hist_bus = (
-                    df_incidentes_bus.groupby(["id_bus", "ruta"])
-                    .agg(
-                        Pico_Ocupacion=("pasajeros", "max"),
-                        Inicio_Sobrecupo=("tiempo_seg", "min"),
-                        Fin_Sobrecupo=("tiempo_seg", "max"),
-                    )
-                    .reset_index()
-                )
-                hist_bus["Inicio_Sobrecupo"] = hist_bus["Inicio_Sobrecupo"].apply(
+            bus_history = aggregate_bus_incidents(pl.from_pandas(buses_df)).to_pandas()
+            if len(bus_history) > 0:
+                bus_history["overcrowding_start"] = bus_history[
+                    "overcrowding_start"
+                ].apply(
                     lambda s: (dt_start + datetime.timedelta(seconds=s)).strftime(
                         "%I:%M:%S %p"
                     )
                 )
-                hist_bus["Fin_Sobrecupo"] = hist_bus["Fin_Sobrecupo"].apply(
+                bus_history["overcrowding_end"] = bus_history["overcrowding_end"].apply(
                     lambda s: (dt_start + datetime.timedelta(seconds=s)).strftime(
                         "%I:%M:%S %p"
                     )
                 )
-                hist_bus = hist_bus[
+                bus_history = bus_history[
                     [
-                        "ruta",
-                        "id_bus",
-                        "Pico_Ocupacion",
-                        "Inicio_Sobrecupo",
-                        "Fin_Sobrecupo",
+                        "route",
+                        "bus_id",
+                        "peak_passengers",
+                        "overcrowding_start",
+                        "overcrowding_end",
                     ]
                 ].rename(
                     columns={
-                        "ruta": "Ruta",
-                        "id_bus": "ID Bus",
-                        "Pico_Ocupacion": "Máx Pax",
+                        "route": "Ruta",
+                        "bus_id": "ID Bus",
+                        "peak_passengers": "Máx Pax",
+                        "overcrowding_start": "Inicio Sobrecupo",
+                        "overcrowding_end": "Fin Sobrecupo",
                     }
                 )
                 st.dataframe(
-                    hist_bus.sort_values(by="Máx Pax", ascending=False),
+                    bus_history.sort_values(by="Máx Pax", ascending=False),
                     hide_index=True,
                     use_container_width=True,
                 )
@@ -687,40 +687,40 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
     with tab_bus:
         st.markdown("### Auditoría Físico-Estadística de Carga por Ruta")
         active_res = (
-            st.session_state["resultado_opt"]
-            if ia_activa
-            else st.session_state["resultado_base"]
+            st.session_state["opt_result"]
+            if is_ai_active
+            else st.session_state["base_result"]
         )
 
         if (
-            hasattr(active_res, "perfil_carga_rutas")
-            and len(active_res.perfil_carga_rutas) > 0
+            hasattr(active_res, "route_load_profiles")
+            and len(active_res.route_load_profiles) > 0
         ):
-            ruta_sel = st.selectbox(
+            selected_route = st.selectbox(
                 "Seleccione la Ruta a auditar:",
-                list(active_res.perfil_carga_rutas.keys()),
+                list(active_res.route_load_profiles.keys()),
             )
-            df_perfil = pl.DataFrame(
-                active_res.perfil_carga_rutas[ruta_sel]
+            load_profile_df = pl.DataFrame(
+                active_res.route_load_profiles[selected_route]
             ).to_pandas()
 
-            fig_carga = px.line(
-                df_perfil,
+            load_profile_fig = px.line(
+                load_profile_df,
                 x="estacion",
                 y="promedio_a_bordo",
                 markers=True,
-                title=f"Perfil Histórico de Ocupación Promedio: {ruta_sel} a lo largo de la Troncal",
+                title=f"Perfil Histórico de Ocupación Promedio: {selected_route} a lo largo de la Troncal",
                 template="plotly_dark",
                 color_discrete_sequence=["#58A6FF"],
             )
             # Maximum Physical Capacity & Critical Crowding Zone
-            fig_carga.add_hline(
+            load_profile_fig.add_hline(
                 y=160,
                 line_dash="dash",
                 line_color="#E6EDF3",
                 annotation_text="Límite Físico del Chasis (160 pax)",
             )
-            fig_carga.add_hrect(
+            load_profile_fig.add_hrect(
                 y0=152,
                 y1=180,
                 line_width=0,
@@ -730,48 +730,52 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 annotation_position="top left",
             )
 
-            fig_carga.update_traces(
+            load_profile_fig.update_traces(
                 hovertemplate="<b>%{x}</b><br>Ocupación Promedio: %{y:.1f} pax<br>Factor de Carga: %{customdata:.1f}%<extra></extra>",
-                customdata=(df_perfil["promedio_a_bordo"] / 160.0) * 100,
+                customdata=(load_profile_df["promedio_a_bordo"] / 160.0) * 100,
             )
 
-            fig_carga.update_layout(
+            load_profile_fig.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 xaxis_tickangle=-45,
                 yaxis_range=[0, 180],
                 yaxis_title="Pasajeros Promedio A Bordo",
             )
-            st.plotly_chart(fig_carga, use_container_width=True)
+            st.plotly_chart(load_profile_fig, use_container_width=True)
         else:
             st.warning(
                 "No se detectó un perfil de carga válido en la memoria del motor."
             )
 
     # TABS 3: QUEUE DYNAMICS
-    with tab_estaciones:
+    with tab_stations:
         st.markdown("### Serie Temporal: Acumulación vs Evacuación en Andén $Q(t)$")
         selected_station = st.selectbox(
-            "Auditar Estación Específica:", df_topo["nombre"].tolist()
+            "Auditar Estación Específica:", topology_df["nombre"].tolist()
         )
-        st_code = df_topo[df_topo["nombre"] == selected_station].iloc[0]["codigo"]
+        station_code = topology_df[topology_df["nombre"] == selected_station].iloc[0][
+            "codigo"
+        ]
 
-        df_cola_hist = colas_df[colas_df["codigo_estacion"] == st_code].copy()
+        station_queue_history = queues_df[
+            queues_df["station_code"] == station_code
+        ].copy()
 
-        if len(df_cola_hist) > 0:
-            df_cola_hist["hora_dt"] = df_cola_hist["tiempo_seg"].apply(
+        if len(station_queue_history) > 0:
+            station_queue_history["clock_dt"] = station_queue_history["time_sec"].apply(
                 lambda s: dt_start + datetime.timedelta(seconds=s)
             )
 
-            fig_q = px.line(
-                df_cola_hist,
-                x="hora_dt",
-                y="cola_pasajeros",
+            queue_fig = px.line(
+                station_queue_history,
+                x="clock_dt",
+                y="queue_size",
                 title=f"Evolución Matemática de $Q(t)$ en {selected_station}",
                 template="plotly_dark",
                 color_discrete_sequence=["#FB8C00"],
             )
-            fig_q.update_layout(
+            queue_fig.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 yaxis_title="Volumen Q(t) [Pasajeros]",
@@ -779,7 +783,7 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
             )
 
             # Scrubber Time marker
-            fig_q.add_vline(
+            queue_fig.add_vline(
                 x=current_dt.timestamp() * 1000,
                 line_dash="solid",
                 line_width=2,
@@ -787,7 +791,7 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 annotation_text="▶ Instante de Inspección Actual",
             )
             # Saturation thresholds
-            fig_q.add_hline(
+            queue_fig.add_hline(
                 y=150,
                 line_dash="dash",
                 line_color="#E53935",
@@ -795,7 +799,7 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 annotation_text="Riesgo de Colapso (>150 pax)",
             )
 
-            st.plotly_chart(fig_q, use_container_width=True)
+            st.plotly_chart(queue_fig, use_container_width=True)
         else:
             st.warning(
                 "No hay datos históricos para esta estación en la franja seleccionada."
@@ -804,50 +808,50 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
     # TABS 4: AI COMPARISON
     with tab_ia:
         st.markdown("### Contraste Científico Operacional: $S_{base}$ vs $S_{opt}$")
-        if ia_activa:
-            res_opt = st.session_state["resultado_opt"]
-            opt_estado = st.session_state["mejor_estado"]
+        if is_ai_active:
+            opt_result = st.session_state["opt_result"]
+            opt_state = st.session_state["best_state"]
 
-            col_l_ia, col_r_ia = st.columns(2)
-            with col_l_ia:
+            col_base_scenario, col_opt_scenario = st.columns(2)
+            with col_base_scenario:
                 st.markdown(
                     "<div style='background-color:#21262d; padding:20px; border-radius:8px; border-left:4px solid #E53935;'>",
                     unsafe_allow_html=True,
                 )
                 st.markdown("#### 🔴 Operación Original (GTFS Oficial)")
-                st.write(f"**Frecuencias Estáticas:** {frecuencias_oficiales}")
+                st.write(f"**Frecuencias Estáticas:** {official_headways}")
                 st.write(
-                    f"**Tiempo de Espera Promedio:** {res_base.tiempo_espera_promedio_min:.2f} minutos"
+                    f"**Tiempo de Espera Promedio:** {base_result.avg_waiting_time_min:.2f} minutos"
                 )
                 st.write(
-                    f"**Pasajeros Represados Totales:** {res_base.pasajeros_quedados_en_cola:,} personas"
+                    f"**Pasajeros Represados Totales:** {base_result.stranded_passengers_in_queue:,} personas"
                 )
                 st.write(
-                    f"**Tasa de Sobrecupo Crítico:** {res_base.porcentaje_buses_sobrecupo:.1f}%"
+                    f"**Tasa de Sobrecupo Crítico:** {base_result.overcrowded_bus_pct:.1f}%"
                 )
                 st.write(
-                    f"**Volumen de Flota Inyectada:** {res_base.total_buses_despachados} buses"
+                    f"**Volumen de Flota Inyectada:** {base_result.total_dispatched_buses} buses"
                 )
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            with col_r_ia:
+            with col_opt_scenario:
                 st.markdown(
                     "<div style='background-color:#21262d; padding:20px; border-radius:8px; border-left:4px solid #43A047;'>",
                     unsafe_allow_html=True,
                 )
                 st.markdown("#### 🟢 Agente FlowTM (Simulated Annealing)")
-                st.write(f"**Frecuencias Optimizadas:** {opt_estado.frecuencias}")
+                st.write(f"**Frecuencias Optimizadas:** {opt_state.headways}")
                 st.write(
-                    f"**Tiempo de Espera Promedio:** {res_opt.tiempo_espera_promedio_min:.2f} minutos"
+                    f"**Tiempo de Espera Promedio:** {opt_result.avg_waiting_time_min:.2f} minutos"
                 )
                 st.write(
-                    f"**Pasajeros Represados Totales:** {res_opt.pasajeros_quedados_en_cola:,} personas"
+                    f"**Pasajeros Represados Totales:** {opt_result.stranded_passengers_in_queue:,} personas"
                 )
                 st.write(
-                    f"**Tasa de Sobrecupo Crítico:** {res_opt.porcentaje_buses_sobrecupo:.1f}%"
+                    f"**Tasa de Sobrecupo Crítico:** {opt_result.overcrowded_bus_pct:.1f}%"
                 )
                 st.write(
-                    f"**Volumen de Flota Inyectada:** {res_opt.total_buses_despachados} buses"
+                    f"**Volumen de Flota Inyectada:** {opt_result.total_dispatched_buses} buses"
                 )
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -857,12 +861,12 @@ if buses_df is not None and colas_df is not None and len(buses_df) > 0:
                 [
                     {
                         "route_id": r,
-                        "start_time": f"{h_ini:02d}:00:00",
-                        "end_time": f"{h_fin:02d}:00:00",
+                        "start_time": f"{session_start_hour:02d}:00:00",
+                        "end_time": f"{session_end_hour:02d}:00:00",
                         "headway_secs": int(m * 60),
                         "exact_times": 0,
                     }
-                    for r, m in opt_estado.frecuencias.items()
+                    for r, m in opt_state.headways.items()
                 ]
             )
             st.dataframe(df_gtfs.to_pandas(), hide_index=True, use_container_width=True)
