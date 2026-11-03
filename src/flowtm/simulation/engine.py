@@ -129,10 +129,13 @@ class CorridorSimulator:
 
         # Empirical destination attraction weights calibrated from tap-out telemetry
         df_alightings = pl.read_parquet(self.scenario_dir / "pesos_descenso.parquet")
-        self.attraction_weights: dict[str, float] = {
-            row["CODIGO_ESTACION"]: row["peso_atraccion"]
-            for row in df_alightings.iter_rows(named=True)
-        }
+        self.attraction_weights: dict[str, float] = dict(
+            zip(
+                df_alightings["CODIGO_ESTACION"],
+                df_alightings["peso_atraccion"],
+                strict=True,
+            )
+        )
 
         self.collector = SimulationCollector()
         self.passenger_id_counter = 1
@@ -163,7 +166,6 @@ class CorridorSimulator:
             )
             # Physical platform docking bay capacity (2 articulated vehicles simultaneously)
             station.bay_resource = simpy.Resource(env, capacity=2)
-            station.recurso_bahia = station.bay_resource
             self.stations[r["codigo"]] = station
 
         self.collector = SimulationCollector()
@@ -493,36 +495,3 @@ class CorridorSimulator:
             station_metrics=station_metrics,
             route_load_profiles=route_profiles,
         )
-
-    # Backward compatibility aliases
-    def simular(
-        self,
-        frecuencias: dict,
-        hora_inicio: int = 6,
-        hora_fin: int = 9,
-        duracion_horas: float | None = None,
-        semilla: int = 42,
-    ) -> SimulationResult:
-        return self.simulate(
-            headways=frecuencias,
-            start_hour=hora_inicio,
-            end_hour=hora_fin,
-            duration_hours=duracion_horas,
-            seed=semilla,
-        )
-
-    @property
-    def estaciones_dict(self) -> dict[str, Station]:
-        return self.stations
-
-    @property
-    def codigos_ordenados(self) -> list[str]:
-        return self.ordered_station_codes
-
-    @property
-    def buses_simulados(self) -> list[Bus]:
-        return self.simulated_buses
-
-
-# Class alias for backward compatibility
-SimuladorCorredor = CorridorSimulator

@@ -25,6 +25,7 @@ Exact weights from academic specification:
 from typing import Any
 
 from flowtm.domain.models import SimulationResult
+from flowtm.domain.state import MAX_FLEET_CAPACITY
 
 
 class UtilityCalculator:
@@ -39,7 +40,7 @@ class UtilityCalculator:
         w_overcrowding: float = 0.30,
         w_stranded: float = 0.15,
         w_fleet: float = 0.15,
-        max_fleet: int = 106,
+        max_fleet: int = MAX_FLEET_CAPACITY,
     ) -> None:
         self.w1 = w_wait
         self.w2 = w_overcrowding
@@ -55,7 +56,8 @@ class UtilityCalculator:
 
         Args:
             result: SimulationResult containing aggregate KPIs.
-            fleet_used: Number of buses required by the schedule. If None, defaults to 106.
+            fleet_used: Number of buses required by the schedule. If None, defaults to
+                ``max_fleet``.
 
         Returns:
             Negative total cost score U(S) (higher / closer to 0 is better).
@@ -84,12 +86,12 @@ class UtilityCalculator:
         q_norm = q_remanente / 1000.0
         w_stranded_term = self.w3 * q_norm
 
-        # 4. Fleet consumption component: B_usados normalized by B_max = 106
-        actual_fleet = fleet_used if fleet_used is not None else 106
+        # 4. Fleet consumption component: B_usados normalized by B_max
+        actual_fleet = fleet_used if fleet_used is not None else self.max_fleet
         fleet_norm = actual_fleet / float(self.max_fleet)
         w_fleet_term = self.w4 * fleet_norm
 
-        # Hard barrier penalty if physical fleet constraint (106 buses) is violated
+        # Hard barrier penalty if the physical fleet constraint (B_max) is violated
         hard_penalty = 0.0
         if actual_fleet > self.max_fleet:
             excess = actual_fleet - self.max_fleet
@@ -117,7 +119,3 @@ class UtilityCalculator:
             "q_remanente": q_remanente,
             "fleet_used": actual_fleet,
         }
-
-    # Backward compatibility alias
-    def evaluar(self, res: SimulationResult, fleet_used: int | None = None) -> float:
-        return self.evaluate(res, fleet_used=fleet_used)

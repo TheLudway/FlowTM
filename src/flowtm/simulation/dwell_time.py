@@ -32,7 +32,3 @@ def calculate_dwell_time_sec(boarding_count: int, alighting_count: int) -> float
 
     # Clamped between minimum clearance (12s) and maximum operational threshold (75s)
     return min(75.0, max(12.0, total_dwell_sec))
-
-
-# Backward compatibility alias
-calcular_tiempo_parada_seg = calculate_dwell_time_sec

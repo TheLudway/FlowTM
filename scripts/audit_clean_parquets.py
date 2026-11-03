@@ -48,17 +48,17 @@ alightings_audit = audit_directory(ALIGHTINGS_PATH)
 validations_audit = audit_directory(VALIDATIONS_PATH)
 
 print("=" * 80)
-print("AUDIT: TRUNK ALIGHTINGS (Turnstiles)")
+print("AUDITORÍA: SALIDAS TRONCAL (Torniquetes)")
 print("=" * 80)
-print(f"Clean files:         {alightings_audit['num_files']}")
-print(f"Total rows:          {alightings_audit['total_rows']:,}")
-print(f"Total disk size:     {alightings_audit['total_size_mb']} MB")
-print(f"Sample file:         {alightings_audit['first_file']}")
-print("\nFull column schema:")
+print(f"[INFO] Archivos limpios:    {alightings_audit['num_files']}")
+print(f"[INFO] Filas totales:       {alightings_audit['total_rows']:,}")
+print(f"[INFO] Tamaño en disco:     {alightings_audit['total_size_mb']} MB")
+print(f"[INFO] Archivo de muestra:  {alightings_audit['first_file']}")
+print("\n[INFO] Esquema completo de columnas:")
 if alightings_audit["sample_df"] is not None:
     for col, dtype in alightings_audit["sample_df"].schema.items():
         print(f"  - {col:<56}: {dtype}")
-    print("\nFirst 5 records (key business and normalization columns):")
+    print("\n[INFO] Primeros 5 registros (columnas clave de negocio y normalización):")
     cols_sal = [
         "CODIGO_ESTACION",
         "CODIGO_TRONCAL",
@@ -69,17 +69,17 @@ if alightings_audit["sample_df"] is not None:
     print(alightings_audit["sample_df"].select(cols_sal))
 
 print("\n" + "=" * 80)
-print("AUDIT: TRUNK VALIDATIONS (Boardings)")
+print("AUDITORÍA: VALIDACIONES TRONCAL (Abordajes)")
 print("=" * 80)
-print(f"Clean files:         {validations_audit['num_files']}")
-print(f"Total rows:          {validations_audit['total_rows']:,}")
-print(f"Total disk size:     {validations_audit['total_size_mb']} MB")
-print(f"Sample file:         {validations_audit['first_file']}")
-print("\nFull column schema:")
+print(f"[INFO] Archivos limpios:    {validations_audit['num_files']}")
+print(f"[INFO] Filas totales:       {validations_audit['total_rows']:,}")
+print(f"[INFO] Tamaño en disco:     {validations_audit['total_size_mb']} MB")
+print(f"[INFO] Archivo de muestra:  {validations_audit['first_file']}")
+print("\n[INFO] Esquema completo de columnas:")
 if validations_audit["sample_df"] is not None:
     for col, dtype in validations_audit["sample_df"].schema.items():
         print(f"  - {col:<56}: {dtype}")
-    print("\nFirst 5 records (key business and normalization columns):")
+    print("\n[INFO] Primeros 5 registros (columnas clave de negocio y normalización):")
     cols_val = [
         "CODIGO_ESTACION",
         "CODIGO_TRONCAL",

@@ -6,12 +6,25 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+import random
 from pathlib import Path
 
+import pytest
+
 from flowtm.domain.models import SimulationResult
-from flowtm.domain.state import ScheduleState
+from flowtm.domain.state import MAX_FLEET_CAPACITY, ScheduleState
 from flowtm.infrastructure.gtfs_exporter import export_gtfs_frequencies
+from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
 from flowtm.optimization.utility import UtilityCalculator
+
+BASE_HEADWAYS: dict[str, float] = {
+    "B13": 2.0,
+    "B18": 2.0,
+    "B23": 3.0,
+    "B27": 4.0,
+    "B74": 4.0,
+    "B75": 2.0,
+}
 
 
 def test_schedule_state_fleet_constraint():
@@ -48,14 +61,85 @@ def test_neighbor_preserves_fleet_feasibility():
         "B75": 2.0,
     }
     state = ScheduleState(headways=base_headways)
+    rng = random.Random(0)
 
-    for _ in range(20):
-        neighbor = state.generate_neighbor(step_min=0.5)
+    for _ in range(200):
+        neighbor = state.generate_neighbor(step_min=0.5, rng=rng)
         # Verify bounds [2.0, 15.0]
         for _r, h in neighbor.headways.items():
             assert 2.0 <= h <= 15.0
         # Verify fleet feasibility
-        assert neighbor.total_fleet_used() <= 106
+        assert neighbor.total_fleet_used() <= MAX_FLEET_CAPACITY
+
+
+def test_neighbor_returns_unchanged_state_when_no_feasible_candidate():
+    # Two symmetric routes at exactly the fleet limit: any boost/trim pair adds one
+    # bus (ceil(60/9.5) + ceil(60/10.5) = 7 + 6 = 13 > 12), so every candidate is
+    # infeasible and the current state must be returned unchanged.
+    state = ScheduleState(
+        headways={"R1": 10.0, "R2": 10.0},
+        cycle_times={"R1": 60.0, "R2": 60.0},
+        max_fleet=12,
+    )
+    assert state.is_fleet_feasible()
+
+    neighbor = state.generate_neighbor(step_min=0.5, rng=random.Random(1))
+
+    assert neighbor.headways == state.headways
+    assert neighbor is not state
+    assert neighbor.is_fleet_feasible()
+
+
+def test_neighbor_generation_is_reproducible_with_seed():
+    state = ScheduleState(headways=BASE_HEADWAYS)
+    first = state.generate_neighbor(rng=random.Random(123))
+    second = state.generate_neighbor(rng=random.Random(123))
+    assert first.headways == second.headways
+
+
+def test_optimizer_rejects_infeasible_initial_state(synthetic_scenario_dir: Path):
+    optimizer = SimulatedAnnealingOptimizer(
+        synthetic_scenario_dir, iterations=1, verbose=False
+    )
+    infeasible_state = ScheduleState(headways=BASE_HEADWAYS, max_fleet=50)
+
+    with pytest.raises(ValueError, match="supera la flota"):
+        optimizer.optimize(infeasible_state)
+
+
+def test_optimizer_returns_feasible_best_state(synthetic_scenario_dir: Path):
+    optimizer = SimulatedAnnealingOptimizer(
+        synthetic_scenario_dir, iterations=3, seed=42, verbose=False
+    )
+    initial_state = ScheduleState(headways=BASE_HEADWAYS)
+
+    best_state, best_result = optimizer.optimize(initial_state)
+
+    assert best_state.is_fleet_feasible()
+    assert best_result.total_dispatched_buses > 0
+    assert len(optimizer.history) == 4
+    assert all(entry["fleet_used"] <= MAX_FLEET_CAPACITY for entry in optimizer.history)
+    assert optimizer.history[-1]["best_utility"] >= optimizer.history[0]["utility"]
+
+
+def test_optimizer_is_reproducible_with_seed(synthetic_scenario_dir: Path):
+    initial_state = ScheduleState(headways=BASE_HEADWAYS)
+
+    runs = []
+    for _ in range(2):
+        optimizer = SimulatedAnnealingOptimizer(
+            synthetic_scenario_dir, iterations=3, seed=2026, verbose=False
+        )
+        best_state, _ = optimizer.optimize(initial_state)
+        runs.append((best_state.headways, optimizer.history))
+
+    assert runs[0][0] == runs[1][0]
+    assert [entry["headways"] for entry in runs[0][1]] == [
+        entry["headways"] for entry in runs[1][1]
+    ]
+    assert [entry["accepted"] for entry in runs[0][1]] == [
+        entry["accepted"] for entry in runs[1][1]
+    ]
 
 
 def test_multicriteria_utility_function():

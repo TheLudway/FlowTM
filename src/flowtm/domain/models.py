@@ -166,31 +166,6 @@ class Station:
             1 for p in self.waiting_queue if p.destination_station in express_hub_codes
         )
 
-    # Backward compatibility aliases for existing simulator calls during refactoring
-    def registrar_llegada(self, pasajero: Passenger) -> None:
-        self.register_arrival(pasajero)
-
-    def obtener_pasajeros_aptos(
-        self, paradas_bus: list[str], cupo_disponible: int
-    ) -> list[Passenger]:
-        return self.board_passengers(paradas_bus, cupo_disponible)
-
-    @property
-    def cola_pasajeros(self) -> list[Passenger]:
-        return self.waiting_queue
-
-    @cola_pasajeros.setter
-    def cola_pasajeros(self, value: list[Passenger]) -> None:
-        self.waiting_queue = value
-
-    @property
-    def cola_corriente(self) -> int:
-        return self.local_queue_count
-
-    @property
-    def cola_expreso(self) -> int:
-        return self.express_queue_count
-
 
 @dataclass
 class Bus:
@@ -232,39 +207,6 @@ class Bus:
             self.total_passengers / self.max_capacity if self.max_capacity > 0 else 0.0
         )
 
-    # Backward compatibility aliases for existing simulator calls
-    @property
-    def id_bus(self) -> str:
-        return self.bus_id
-
-    @property
-    def ruta(self) -> str:
-        return self.route
-
-    @property
-    def capacidad_maxima(self) -> int:
-        return self.max_capacity
-
-    @property
-    def pasajeros_a_bordo(self) -> list[Passenger]:
-        return self.onboard_passengers
-
-    @property
-    def paradas_programadas(self) -> list[str]:
-        return self.scheduled_stops
-
-    @property
-    def perfil_pasajeros_por_parada(self) -> list[dict]:
-        return self.passenger_profile_by_stop
-
-    @property
-    def factor_ocupacion(self) -> float:
-        return self.occupancy_rate
-
-    @property
-    def capacidad_disponible(self) -> int:
-        return self.available_capacity
-
 
 @dataclass
 class SimulationResult:
@@ -290,42 +232,3 @@ class SimulationResult:
     total_dispatched_buses: int
     station_metrics: list[dict] = field(default_factory=list)
     route_load_profiles: dict[str, list[dict]] = field(default_factory=dict)
-
-    # Backward compatibility aliases
-    @property
-    def tiempo_espera_promedio_min(self) -> float:
-        return self.avg_waiting_time_min
-
-    @property
-    def factor_ocupacion_promedio(self) -> float:
-        return self.avg_occupancy_rate
-
-    @property
-    def porcentaje_buses_sobrecupo(self) -> float:
-        return self.overcrowded_bus_pct
-
-    @property
-    def total_pasajeros_transportados(self) -> int:
-        return self.total_transported_passengers
-
-    @property
-    def pasajeros_quedados_en_cola(self) -> int:
-        return self.stranded_passengers_in_queue
-
-    @property
-    def total_buses_despachados(self) -> int:
-        return self.total_dispatched_buses
-
-    @property
-    def metricas_estaciones(self) -> list[dict]:
-        return self.station_metrics
-
-    @property
-    def perfil_carga_rutas(self) -> dict[str, list[dict]]:
-        return self.route_load_profiles
-
-
-# Aliases for existing imports
-Pasajero = Passenger
-Estacion = Station
-ResultadoSimulacion = SimulationResult

@@ -76,68 +76,67 @@ class ScheduleState:
         return sum(self.fleet_used_by_route().values())
 
     def is_fleet_feasible(self) -> bool:
-        """Checks if total fleet does not exceed B_max = 106."""
+        """Checks if total fleet does not exceed B_max (``max_fleet``)."""
         return self.total_fleet_used() <= self.max_fleet
 
-    def generate_neighbor(self, step_min: float = 0.5) -> "ScheduleState":
-        """
-        Agent Action:
-        Generates an adjacent candidate state by perturbing dispatch headways.
-        To respect the physical fleet capacity constraint (106 buses), reducing the interval
-        on one route (increasing frequency) requires compensating by increasing the interval
-        on another route.
-
-        Args:
-            step_min: Headway perturbation step in minutes (default 0.5 min).
-
-        Returns:
-            A new ScheduleState representing the perturbed schedule.
-        """
-        new_headways = self.headways.copy()
-        routes = list(new_headways.keys())
-
-        if len(routes) < 2:
-            return ScheduleState(headways=new_headways, cycle_times=self.cycle_times)
-
-        # Try a few candidate neighbor perturbations to find one respecting or nearing fleet capacity
-        best_candidate = None
-        for _ in range(10):
-            cand = new_headways.copy()
-            route_boost = random.choice(routes)
-            route_trim = random.choice([r for r in routes if r != route_boost])
-
-            cand[route_boost] = max(
-                2.0, min(15.0, round(cand[route_boost] - step_min, 2))
-            )
-            cand[route_trim] = max(
-                2.0, min(15.0, round(cand[route_trim] + step_min, 2))
-            )
-
-            cand_state = ScheduleState(
-                headways=cand, cycle_times=self.cycle_times, max_fleet=self.max_fleet
-            )
-            if cand_state.total_fleet_used() <= self.max_fleet:
-                return cand_state
-            if (
-                best_candidate is None
-                or cand_state.total_fleet_used() < best_candidate.total_fleet_used()
-            ):
-                best_candidate = cand_state
-
-        return best_candidate or ScheduleState(
-            headways=new_headways,
-            cycle_times=self.cycle_times,
+    def copy(self) -> "ScheduleState":
+        """Return an independent copy of this state."""
+        return ScheduleState(
+            headways=self.headways.copy(),
+            cycle_times=self.cycle_times.copy(),
             max_fleet=self.max_fleet,
         )
 
-    # Backward compatibility aliases
-    @property
-    def frecuencias(self) -> dict[str, float]:
-        return self.headways
+    def generate_neighbor(
+        self,
+        step_min: float = 0.5,
+        rng: random.Random | None = None,
+        max_attempts: int = 10,
+    ) -> "ScheduleState":
+        """
+        Agent Action:
+        Generates an adjacent candidate state by perturbing dispatch headways.
+        Reducing the interval on one route (increasing frequency) is compensated by
+        increasing the interval on another route.
 
-    @frecuencias.setter
-    def frecuencias(self, value: dict[str, float]) -> None:
-        self.headways = value
+        The fleet constraint is enforced by construction: only candidates with
+        ``total_fleet_used() <= max_fleet`` are returned. If no feasible candidate
+        is found within ``max_attempts``, an unchanged copy of the current state is
+        returned instead.
 
-    def generar_vecino(self, paso_min: float = 0.5) -> "ScheduleState":
-        return self.generate_neighbor(step_min=paso_min)
+        Args:
+            step_min: Headway perturbation step in minutes (default 0.5 min).
+            rng: Random generator used for the perturbation. Pass a seeded
+                ``random.Random`` for reproducible searches.
+            max_attempts: Number of random perturbations to try.
+
+        Returns:
+            A new ScheduleState representing the perturbed (or unchanged) schedule.
+        """
+        rng = rng or random.Random()
+        routes = list(self.headways.keys())
+
+        if len(routes) < 2:
+            return self.copy()
+
+        for _ in range(max_attempts):
+            candidate_headways = self.headways.copy()
+            route_boost = rng.choice(routes)
+            route_trim = rng.choice([r for r in routes if r != route_boost])
+
+            candidate_headways[route_boost] = max(
+                2.0, min(15.0, round(candidate_headways[route_boost] - step_min, 2))
+            )
+            candidate_headways[route_trim] = max(
+                2.0, min(15.0, round(candidate_headways[route_trim] + step_min, 2))
+            )
+
+            candidate_state = ScheduleState(
+                headways=candidate_headways,
+                cycle_times=self.cycle_times,
+                max_fleet=self.max_fleet,
+            )
+            if candidate_state.is_fleet_feasible():
+                return candidate_state
+
+        return self.copy()

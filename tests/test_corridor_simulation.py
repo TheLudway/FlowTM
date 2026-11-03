@@ -73,16 +73,26 @@ def test_schedule_state_neighbor_generation():
         assert 2.0 <= h <= 15.0, f"Route {r} headway {h} out of bounds"
 
 
-def test_corridor_simulation_6_routes():
-    scenario_dir = Path("data/scenarios/piloto")
-    if not scenario_dir.exists():
-        return
-
-    simulator = CorridorSimulator(scenario_dir)
+def test_corridor_simulation_6_routes(synthetic_scenario_dir: Path):
+    simulator = CorridorSimulator(synthetic_scenario_dir)
     headways = {"B13": 2.0, "B18": 2.0, "B23": 3.0, "B27": 4.0, "B74": 4.0, "B75": 2.0}
     results = simulator.simulate(headways, duration_hours=1.0)
 
     assert results.total_dispatched_buses > 0
-    assert results.total_transported_passengers >= 0
+    assert results.total_transported_passengers > 0
     assert len(results.station_metrics) == 17
     assert set(results.route_load_profiles.keys()) == set(headways.keys())
+
+
+def test_corridor_simulation_is_reproducible_with_seed(synthetic_scenario_dir: Path):
+    headways = {"B13": 3.0, "B18": 4.0, "B23": 5.0, "B27": 4.0, "B74": 6.0, "B75": 3.0}
+    first = CorridorSimulator(synthetic_scenario_dir).simulate(
+        headways, duration_hours=1.0, seed=7
+    )
+    second = CorridorSimulator(synthetic_scenario_dir).simulate(
+        headways, duration_hours=1.0, seed=7
+    )
+
+    assert first.avg_waiting_time_min == second.avg_waiting_time_min
+    assert first.total_transported_passengers == second.total_transported_passengers
+    assert first.stranded_passengers_in_queue == second.stranded_passengers_in_queue

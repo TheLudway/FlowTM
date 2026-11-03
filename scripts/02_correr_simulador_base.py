@@ -22,7 +22,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 scenario_dir = ROOT_DIR / "data/scenarios/piloto"
 
 print("=" * 80)
-print("SIMULATION: OFFICIAL BASELINE SCENARIO (TRANSMILENIO PEAK GTFS)")
+print("SIMULACIÓN: ESCENARIO BASE OFICIAL (GTFS HORA PICO TRANSMILENIO)")
 print("=" * 80)
 
 # Reference: Official TransMilenio GTFS schedule for morning peak hour (06:00 - 09:00 AM)
@@ -36,31 +36,33 @@ base_headways: dict[str, float] = {
     "B75": 2.0,  # Express Usme -> Portal Norte (GTFS ~1.54 min)
 }
 
-print(f"Dispatch base headways (minutes): {base_headways}\n")
-print("Running 3-hour morning peak simulation (06:00 - 09:00 AM)...")
+print(f"[INFO] Intervalos base de despacho (minutos): {base_headways}\n")
+print("[INFO] Ejecutando simulación de 3 horas de hora pico (06:00 - 09:00 AM)...")
 
 simulator = CorridorSimulator(scenario_dir)
 results = simulator.simulate(base_headways, duration_hours=3.0)
 
 print("\n" + "=" * 80)
-print("RESULTS: BASELINE SCENARIO (TRANSMILENIO OFFICIAL BENCHMARK)")
+print("RESULTADOS: ESCENARIO BASE (REFERENCIA OFICIAL TRANSMILENIO)")
 print("=" * 80)
-print(f"Average waiting time           : {results.avg_waiting_time_min:.2f} minutes")
-print(f"Average occupancy rate         : {results.avg_occupancy_rate * 100:.1f}%")
 print(
-    f"Overcrowded bus percentage     : {results.overcrowded_bus_pct:.1f}% (>= 95% load)"
+    f"[INFO] Tiempo medio de espera      : {results.avg_waiting_time_min:.2f} minutos"
 )
-print(f"Total transported passengers   : {results.total_transported_passengers:,}")
-print(f"Stranded passengers in queue   : {results.stranded_passengers_in_queue:,}")
-print(f"Total dispatched buses         : {results.total_dispatched_buses}")
+print(f"[INFO] Ocupación promedio          : {results.avg_occupancy_rate * 100:.1f}%")
+print(
+    f"[INFO] Buses con sobrecupo         : {results.overcrowded_bus_pct:.1f}% (>= 95% de carga)"
+)
+print(f"[INFO] Pasajeros transportados     : {results.total_transported_passengers:,}")
+print(f"[INFO] Pasajeros varados en andén  : {results.stranded_passengers_in_queue:,}")
+print(f"[INFO] Despachos totales          : {results.total_dispatched_buses}")
 print("=" * 80)
 
 # Export telemetry for OCC Dashboard and visualization layers
-telemetria_dir = scenario_dir / "telemetria_base"
-simulator.collector.export_telemetry(telemetria_dir)
+telemetry_dir = scenario_dir / "telemetria_base"
+simulator.collector.export_telemetry(telemetry_dir)
 
 # Save exact calibrated benchmark summary metrics
-metricas = {
+summary_metrics = {
     "avg_waiting_time_min": round(results.avg_waiting_time_min, 2),
     "avg_occupancy_pct": round(results.avg_occupancy_rate * 100, 1),
     "overcrowded_buses_pct": round(results.overcrowded_bus_pct, 1),
@@ -68,9 +70,9 @@ metricas = {
     "stranded_passengers_in_queue": int(results.stranded_passengers_in_queue),
     "total_dispatched_buses": int(results.total_dispatched_buses),
 }
-with open(telemetria_dir / "metricas_resumen.json", "w", encoding="utf-8") as f:
-    json.dump(metricas, f, indent=2)
+with open(telemetry_dir / "metricas_resumen.json", "w", encoding="utf-8") as f:
+    json.dump(summary_metrics, f, indent=2)
 
 print(
-    "Bus and platform queue telemetry + metricas_resumen.json exported for OCC Dashboard."
+    "[INFO] Telemetría de buses, colas y metricas_resumen.json exportadas para el OCC."
 )
