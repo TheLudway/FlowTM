@@ -115,7 +115,7 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
                 <div className="comp-val-col">
                   <span className="col-tag base-tag">GTFS BASE</span>
                   <span className="col-num font-mono tabular-nums">
-                    {summary ? summary.avg_waiting_time_min.toFixed(2) : '3.67'} min
+                    {summary ? summary.avg_waiting_time_min.toFixed(2) : '—'} min
                   </span>
                 </div>
                 <div className="comp-delta-col">
@@ -251,7 +251,7 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
                   <Clock size={16} color="var(--accent-blue)" />
                 </div>
                 <div className="kpi-value tabular-nums">
-                  {summary ? summary.avg_waiting_time_min.toFixed(2) : '3.67'}
+                  {summary ? summary.avg_waiting_time_min.toFixed(2) : '—'}
                   <span className="kpi-unit">min</span>
                 </div>
                 <div className="kpi-subtext">Línea base GTFS pico (Meta &lt; 5.0m)</div>

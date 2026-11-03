@@ -24,6 +24,36 @@ import type {
   SummaryKPIs,
 } from '../types';
 
+/** Physical fleet bound B_max (buses) enforced by the optimizer. */
+const MAX_FLEET = 106;
+/** Avance II, Section 8: target reduction of mean platform wait time. */
+const WAIT_REDUCTION_GOAL_PCT = 15;
+const PLACEHOLDER = '—';
+
+const EMPTY_ITERATION: AIOptimizationIteration = {
+  iteration: 0,
+  temperature: 0,
+  headways: {},
+  utility: 0,
+  delta_u: 0,
+  accepted: false,
+  is_new_best: false,
+  best_utility: 0,
+  wait_time_min: 0,
+  stranded_pax: 0,
+  overcrowded_pct: 0,
+  fleet_used: 0,
+};
+
+const percentChange = (base?: number, value?: number): number | undefined =>
+  base !== undefined && value !== undefined && base !== 0 ? ((value - base) / base) * 100 : undefined;
+
+const formatSigned = (value: number | undefined, digits: number, suffix = ''): string =>
+  value === undefined ? PLACEHOLDER : `${value >= 0 ? '+' : ''}${value.toFixed(digits)}${suffix}`;
+
+const formatFixed = (value: number | undefined, digits: number): string =>
+  value === undefined ? PLACEHOLDER : value.toFixed(digits);
+
 interface AnalyticsViewProps {
   isSplitView: boolean;
   onToggleSplitView?: () => void;
@@ -52,34 +82,31 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 }) => {
   const [hoveredIteration, setHoveredIteration] = useState<AIOptimizationIteration | null>(null);
 
-  // Extract history for the convergence chart
-  const history = useMemo<AIOptimizationIteration[]>(() => {
-    if (aiLog?.history && aiLog.history.length > 0) {
-      return aiLog.history;
-    }
-    // Fallback representative 30 iterations if not yet loaded
-    return Array.from({ length: 31 }, (_, i) => ({
-      iteration: i,
-      temperature: Math.round(75 * Math.pow(0.88, i) * 10) / 10,
-      headways: { B13: 2.5, B18: 3.0, B23: 2.5, B27: 5.0, B74: 4.0, B75: 2.0 },
-      utility: i === 0 ? -1.9981 : -1.9981 + Math.min(0.0734, (i / 18) * 0.0734),
-      delta_u: 0.0,
-      accepted: true,
-      is_new_best: i === 1 || i === 3 || i === 17,
-      best_utility: -1.9247,
-      wait_time_min: 3.48,
-      stranded_pax: 1323,
-      overcrowded_pct: 7.6,
-      fleet_used: 96,
-    }));
-  }, [aiLog]);
+  // Convergence history comes only from the optimizer log; nothing is shown
+  // until it loads, so the chart never displays invented values.
+  const history = useMemo<AIOptimizationIteration[]>(() => aiLog?.history ?? [], [aiLog]);
+  const totalIterations = Math.max(0, history.length - 1);
 
   // Selected iteration to display in inspection bar (hovered or winning optimum)
   const activeInspectorIteration = useMemo<AIOptimizationIteration>(() => {
     if (hoveredIteration) return hoveredIteration;
-    const bestIter = history.find((h) => h.is_new_best && h.iteration === 17) || history[history.length - 1];
-    return bestIter || history[0];
+    const bestIterations = history.filter((h) => h.is_new_best);
+    return bestIterations[bestIterations.length - 1] ?? history[0] ?? EMPTY_ITERATION;
   }, [hoveredIteration, history]);
+
+  // Scenario comparison derived from the exported simulation outputs.
+  const baseFleet = aiLog?.baseline?.fleet_used;
+  const optFleet = aiLog?.optimized?.fleet_used;
+  const fleetSaved = baseFleet !== undefined && optFleet !== undefined ? baseFleet - optFleet : undefined;
+  const baseWait = summary?.avg_waiting_time_min;
+  const optWait = summaryOpt?.avg_waiting_time_min;
+  const waitDeltaPct = percentChange(baseWait, optWait);
+  const baseOvercrowd = summary?.overcrowded_buses_pct;
+  const optOvercrowd = summaryOpt?.overcrowded_buses_pct;
+  const optDispatches = summaryOpt?.total_dispatched_buses;
+  const waitGoalMet = waitDeltaPct !== undefined && waitDeltaPct <= -WAIT_REDUCTION_GOAL_PCT;
+  const overcrowdContained =
+    baseOvercrowd !== undefined && optOvercrowd !== undefined && optOvercrowd <= baseOvercrowd;
 
   // SVG Chart bounds
   const chartMetrics = useMemo(() => {
@@ -120,21 +147,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     return `${pointsPath} L ${endX} ${baseY} L ${startX} ${baseY} Z`;
   }, [pointsPath, history]);
 
-  const baseU = aiLog?.baseline?.utility ?? -1.9981;
-  const optU = aiLog?.optimized?.utility ?? -1.9247;
-  const deltaU = aiLog?.delta_utility ?? (optU - baseU);
+  const baseU = aiLog?.baseline?.utility;
+  const optU = aiLog?.optimized?.utility;
+  const deltaU = aiLog?.delta_utility ?? (baseU !== undefined && optU !== undefined ? optU - baseU : undefined);
+  // Keep the chart scale stable while the log is loading.
+  const baseULine = baseU ?? chartMetrics.minU;
 
-  // GTFS Frequencies data
-  const gtfsHeadways = useMemo(() => {
-    return aiLog?.optimized?.headways || {
-      B13: 2.5,
-      B18: 3.0,
-      B23: 2.5,
-      B27: 5.0,
-      B74: 4.0,
-      B75: 2.0,
-    };
-  }, [aiLog]);
+  // GTFS Frequencies data (optimized vector H* from the optimizer log)
+  const gtfsHeadways = useMemo<Record<string, number>>(() => aiLog?.optimized?.headways ?? {}, [aiLog]);
+  const baseHeadways = useMemo<Record<string, number>>(() => aiLog?.baseline?.headways ?? {}, [aiLog]);
 
   const handleDownloadGtfs = () => {
     const link = document.createElement('a');
@@ -148,15 +169,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const renderScenarioDashboard = (isOptimized: boolean) => {
     const s = isOptimized ? summaryOpt : summary;
     const currentQ = isOptimized ? currentQueuesOptimized : currentQueues;
-    const waitTime = s ? s.avg_waiting_time_min.toFixed(2) : isOptimized ? '3.48' : '3.67';
-    const totalPax = s ? s.total_passengers_served.toLocaleString() : isOptimized ? '48,849' : '48,899';
-    const occPct = s ? s.avg_occupancy_pct.toFixed(1) : '43.0';
-    const strandedPax = s ? (s.stranded_passengers_in_queue ?? 1273).toLocaleString() : isOptimized ? '1,323' : '1,273';
-    const fleetUsed = isOptimized ? (aiLog?.optimized?.fleet_used ?? 96) : (aiLog?.baseline?.fleet_used ?? 106);
+    const waitTime = s ? s.avg_waiting_time_min.toFixed(2) : PLACEHOLDER;
+    const totalPax = s ? s.total_passengers_served.toLocaleString() : PLACEHOLDER;
+    const occPct = s ? s.avg_occupancy_pct.toFixed(1) : PLACEHOLDER;
+    const strandedPax = s?.stranded_passengers_in_queue?.toLocaleString() ?? PLACEHOLDER;
+    const fleetUsed = (isOptimized ? optFleet : baseFleet) ?? PLACEHOLDER;
 
-    const activeHeadways = isOptimized
-      ? gtfsHeadways
-      : { B13: 2.0, B18: 2.0, B23: 3.0, B27: 4.0, B74: 4.0, B75: 2.0 };
+    const activeHeadways = isOptimized ? gtfsHeadways : baseHeadways;
 
     return (
       <div className={`analytics-scenario-column ${isOptimized ? 'optimized-column' : 'baseline-column'}`}>
@@ -168,18 +187,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </span>
             {isOptimized ? (
               <span className="scenario-status-tag opt-tag">
-                <Sparkle size={13} weight="fill" /> IA HEURÍSTICA ACTIVA (96 BUSES)
+                <Sparkle size={13} weight="fill" /> IA HEURÍSTICA ACTIVA ({optFleet ?? PLACEHOLDER} BUSES)
               </span>
             ) : (
               <span className="scenario-status-tag base-tag">
-                <ShieldCheck size={13} weight="fill" /> LÍNEA BASE OFICIAL (106 BUSES)
+                <ShieldCheck size={13} weight="fill" /> LÍNEA BASE OFICIAL ({baseFleet ?? PLACEHOLDER} BUSES)
               </span>
             )}
           </div>
           <p className="scenario-desc">
             {isOptimized
-              ? 'Frecuencias redistribuidas por Recocido Simulado respetando la cota de 106 buses y maximizando U(S).'
-              : 'Despachos históricos oficiales TransMilenio GTFS (06:00 - 09:00 AM) con 106 buses asignados.'}
+              ? `Frecuencias redistribuidas por Recocido Simulado respetando la cota de ${MAX_FLEET} buses y maximizando U(S).`
+              : `Despachos históricos oficiales TransMilenio GTFS (06:00 - 09:00 AM) con ${baseFleet ?? PLACEHOLDER} buses asignados.`}
           </p>
         </div>
 
@@ -193,7 +212,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <div className="card-val-row">
               <span className="card-val tabular-nums font-mono">{waitTime}</span>
               <span className="card-unit">min</span>
-              {isOptimized && <span className="delta-pill delta-good">-5.1%</span>}
+              {isOptimized && waitDeltaPct !== undefined && (
+                <span className={`delta-pill ${waitDeltaPct < 0 ? 'delta-good' : 'delta-neutral'}`}>
+                  {formatSigned(waitDeltaPct, 1, '%')}
+                </span>
+              )}
             </div>
             <span className="card-sub">Espera promedio en andén</span>
           </div>
@@ -206,7 +229,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <div className="card-val-row">
               <span className="card-val tabular-nums font-mono">{strandedPax}</span>
               <span className="card-unit">pax</span>
-              {isOptimized && <span className="delta-pill delta-neutral">Contenido</span>}
+              {isOptimized && summary && summaryOpt && (
+                <span className="delta-pill delta-neutral">
+                  {formatSigned(
+                    percentChange(summary.stranded_passengers_in_queue, summaryOpt.stranded_passengers_in_queue),
+                    1,
+                    '%',
+                  )}
+                </span>
+              )}
             </div>
             <span className="card-sub">Cola al corte de las 09:00 AM</span>
           </div>
@@ -218,8 +249,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
             <div className="card-val-row">
               <span className="card-val tabular-nums font-mono">{fleetUsed}</span>
-              <span className="card-unit">/ 106</span>
-              {isOptimized && <span className="delta-pill delta-good">-10 buses</span>}
+              <span className="card-unit">/ {MAX_FLEET}</span>
+              {isOptimized && fleetSaved !== undefined && (
+                <span className="delta-pill delta-good">-{fleetSaved} buses</span>
+              )}
             </div>
             <span className="card-sub">$0 costo de capital adicional</span>
           </div>
@@ -245,7 +278,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <span className="card-val tabular-nums font-mono">{occPct}%</span>
               <span className="card-unit">flota</span>
             </div>
-            <span className="card-sub">Sobrecupo &gt;95%: {s ? s.overcrowded_buses_pct.toFixed(1) : '7.4'}%</span>
+            <span className="card-sub">Sobrecupo &gt;95%: {s ? s.overcrowded_buses_pct.toFixed(1) : PLACEHOLDER}%</span>
           </div>
         </div>
 
@@ -468,8 +501,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </h3>
               <p className="section-card-subtitle">
                 {isSplitView
-                  ? 'Contraste simultáneo de telemetría física: 106 buses estáticos vs. 96 buses reprogramados algorítmicamente.'
-                  : 'Indicadores de servicio actuales con 106 buses y despachos históricos estáticos (06:00 - 09:00 AM).'}
+                  ? `Contraste simultáneo de telemetría física: ${baseFleet ?? PLACEHOLDER} buses estáticos vs. ${optFleet ?? PLACEHOLDER} buses reprogramados algorítmicamente.`
+                  : `Indicadores de servicio actuales con ${baseFleet ?? PLACEHOLDER} buses y despachos históricos estáticos (06:00 - 09:00 AM).`}
               </p>
             </div>
 
@@ -504,13 +537,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="hero-badge-row">
                 <span className="academic-tag">AVANCE II &bull; INGENIERÍA DE SISTEMAS</span>
                 <span className="peas-model-tag">MODELO FORMAL PEAS &bull; AGENTE RACIONAL</span>
-                <span className="fleet-bound-tag">COTA DURA: &le; 106 BUSES ($0 CAPEX)</span>
+                <span className="fleet-bound-tag">COTA DURA: &le; {MAX_FLEET} BUSES ($0 CAPEX)</span>
                 <span className="algorithm-tag">METAHEURÍSTICA: RECOCIDO SIMULADO</span>
               </div>
               <div className="hero-actions-group">
                 <div className="hero-delta-pill">
                   <TrendUp size={14} weight="bold" />
-                  <span>&Delta;U = +0.0734 GANANCIA NETA</span>
+                  <span>&Delta;U = {formatSigned(deltaU, 4)} GANANCIA NETA</span>
                 </div>
               </div>
             </div>
@@ -520,7 +553,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <p className="hero-subtitle">
                 Demostración formal de la optimización heurística en el gemelo digital SimPy. El agente explora
                 el espacio continuo de frecuencias H &isin; [2.0, 15.0]⁶ respetando la restricción presupuestal estricta
-                de flota (&le; 106 buses) y guiándose por la función de utilidad multi-criterio U(S).
+                de flota (&le; {MAX_FLEET} buses) y guiándose por la función de utilidad multi-criterio U(S).
               </p>
             </div>
           </div>
@@ -534,24 +567,27 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="audit-text-stack">
                 <h4 className="audit-title">Auditoría de Datos Físicos: Simulación Estocástica Real en SimPy</h4>
                 <p className="audit-desc">
-                  Los datos optimizados NO son valores estáticos quemados. Provienen de la ejecución del optimizador
-                  (<code>03_optimizar_frecuencias.py</code>) acoplado al simulador de eventos discretos, generando
-                  7,804 registros de telemetría y 347 expediciones (viajes completos realizados por los 96 buses en rotación continua) exportados en <code>telemetria_opt/</code>.
+                  Los datos optimizados provienen de la ejecución del optimizador
+                  (<code>03_optimizar_frecuencias.py</code>) acoplado al simulador de eventos discretos, que generó
+                  {' '}{optDispatches?.toLocaleString() ?? PLACEHOLDER} expediciones (viajes despachados por los{' '}
+                  {optFleet ?? PLACEHOLDER} buses en rotación continua) exportadas en <code>telemetria_opt/</code>.
                 </p>
               </div>
             </div>
             <div className="audit-metrics-row font-mono">
               <div className="audit-pill">
                 <span className="p-lbl">MOTOR:</span>
-                <span className="p-val">SimPy 4.1.1</span>
+                <span className="p-val">SimPy 4.1</span>
               </div>
               <div className="audit-pill">
                 <span className="p-lbl">VIAJES TOTALES (3H):</span>
-                <span className="p-val">347 expediciones</span>
+                <span className="p-val">{optDispatches?.toLocaleString() ?? PLACEHOLDER} expediciones</span>
               </div>
               <div className="audit-pill">
                 <span className="p-lbl">FLOTA FÍSICA:</span>
-                <span className="p-val font-bold">96 / 106 buses (rotación cíclica)</span>
+                <span className="p-val font-bold">
+                  {optFleet ?? PLACEHOLDER} / {MAX_FLEET} buses (rotación cíclica)
+                </span>
               </div>
               <div className="audit-pill highlight">
                 <span className="p-lbl">INVERSIÓN:</span>
@@ -574,22 +610,22 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   />
                 </div>
                 <p className="panel-main-subtitle">
-                  Evolución de la utilidad durante 30 iteraciones de exploración en ℝ⁶. Pasa el cursor por cada punto para inspeccionar el estado estocástico.
+                  Evolución de la utilidad durante {totalIterations} iteraciones de exploración en ℝ⁶. Pasa el cursor por cada punto para inspeccionar el estado estocástico.
                 </p>
               </div>
 
               <div className="convergence-summary-badges">
                 <div className="summary-badge-item">
                   <span className="badge-lbl">UTILIDAD BASE U₀</span>
-                  <span className="badge-val font-mono tabular-nums">{baseU.toFixed(4)}</span>
+                  <span className="badge-val font-mono tabular-nums">{formatFixed(baseU, 4)}</span>
                 </div>
                 <div className="summary-badge-item opt">
                   <span className="badge-lbl">UTILIDAD OPT U*</span>
-                  <span className="badge-val font-mono tabular-nums">{optU.toFixed(4)}</span>
+                  <span className="badge-val font-mono tabular-nums">{formatFixed(optU, 4)}</span>
                 </div>
                 <div className="summary-badge-item good">
                   <span className="badge-lbl">GANANCIA &Delta;U</span>
-                  <span className="badge-val font-mono tabular-nums">+{deltaU.toFixed(4)}</span>
+                  <span className="badge-val font-mono tabular-nums">{formatSigned(deltaU, 4)}</span>
                 </div>
               </div>
             </div>
@@ -624,15 +660,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 {/* Baseline horizontal line */}
                 <line
                   x1={padX}
-                  y1={getSvgY(baseU)}
+                  y1={getSvgY(baseULine)}
                   x2={svgWidth - padX}
-                  y2={getSvgY(baseU)}
+                  y2={getSvgY(baseULine)}
                   stroke="#E53935"
                   strokeWidth="1.5"
                   strokeDasharray="4 4"
                 />
-                <text x={svgWidth - padX} y={getSvgY(baseU) - 6} fill="#E53935" fontSize="10.5" textAnchor="end" fontWeight="bold">
-                  Línea Base U₀ = {baseU.toFixed(2)}
+                <text x={svgWidth - padX} y={getSvgY(baseULine) - 6} fill="#E53935" fontSize="10.5" textAnchor="end" fontWeight="bold">
+                  Línea Base U₀ = {formatFixed(baseU, 2)}
                 </text>
 
                 {/* Area under curve */}
@@ -666,7 +702,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               {/* Docked Iteration Inspector Strip */}
               <div className="iteration-docked-strip">
                 <div className="docked-left-badge">
-                  <span className="strip-title">ITERACIÓN {activeInspectorIteration.iteration} / 30</span>
+                  <span className="strip-title">ITERACIÓN {activeInspectorIteration.iteration} / {totalIterations}</span>
                   <span className="strip-temp font-mono">T = {activeInspectorIteration.temperature}°C</span>
                   {activeInspectorIteration.is_new_best && (
                     <span className="strip-optimum-tag">★ NUEVO ÓPTIMO</span>
@@ -684,7 +720,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   </div>
                   <div className="docked-metric">
                     <span className="m-label">Flota:</span>
-                    <span className="m-val">{activeInspectorIteration.fleet_used} / 106 buses</span>
+                    <span className="m-val">{activeInspectorIteration.fleet_used} / {MAX_FLEET} buses</span>
                   </div>
                   <div className="docked-metric">
                     <span className="m-label">Cola corte:</span>
@@ -708,7 +744,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <span className="term-weight">w₁ = 0.40</span>
                   <span className="term-name">TIEMPO ESPERA (W̄)</span>
                 </div>
-                <div className="term-formula font-mono">0.40 &times; {aiLog?.optimized?.wait_time_min?.toFixed(2) ?? '3.48'}m</div>
+                <div className="term-formula font-mono">0.40 &times; {formatFixed(aiLog?.optimized?.wait_time_min, 2)}m</div>
                 <span className="term-sub">Minutos promedio de espera en andén</span>
               </div>
 
@@ -717,7 +753,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <span className="term-weight">w₂ = 0.30</span>
                   <span className="term-name">SOBRECUPO (≥95%)^1.5</span>
                 </div>
-                <div className="term-formula font-mono">0.30 &times; ({((aiLog?.optimized?.overcrowded_pct ?? 7.6) / 10).toFixed(2)})^1.5</div>
+                <div className="term-formula font-mono">0.30 &times; ({formatFixed(aiLog ? aiLog.optimized.overcrowded_pct / 10 : undefined, 2)})^1.5</div>
                 <span className="term-sub">Castigo exponencial al hacinamiento</span>
               </div>
 
@@ -726,7 +762,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <span className="term-weight">w₃ = 0.15</span>
                   <span className="term-name">PASAJEROS ANDÉN (Q_rem)</span>
                 </div>
-                <div className="term-formula font-mono">0.15 &times; ({(aiLog?.optimized?.stranded_pax ?? 1323)} / 1000)</div>
+                <div className="term-formula font-mono">0.15 &times; ({aiLog?.optimized?.stranded_pax ?? PLACEHOLDER} / 1000)</div>
                 <span className="term-sub">Pasajeros no abordados al corte</span>
               </div>
 
@@ -735,8 +771,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <span className="term-weight">w₄ = 0.15</span>
                   <span className="term-name">USO FLOTA (B_usados)</span>
                 </div>
-                <div className="term-formula font-mono">0.15 &times; ({(aiLog?.optimized?.fleet_used ?? 96)} / 106)</div>
-                <span className="term-sub">Flota física consumida &le; 106 buses</span>
+                <div className="term-formula font-mono">0.15 &times; ({optFleet ?? PLACEHOLDER} / {MAX_FLEET})</div>
+                <span className="term-sub">Flota física consumida &le; {MAX_FLEET} buses</span>
               </div>
             </div>
           </div>
@@ -767,23 +803,36 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="goal-item-card">
                 <div className="goal-top">
                   <span className="goal-title">Tiempo Medio Espera (W_prom)</span>
-                  <span className="goal-status-pill ok">ALCANZADO</span>
+                  <span className={`goal-status-pill ${waitGoalMet ? 'ok' : 'partial'}`}>
+                    {waitGoalMet ? 'CUMPLE' : 'PARCIAL'}
+                  </span>
                 </div>
                 <div className="goal-vals">
-                  <span className="goal-target font-mono">Meta: &ge; 15% red.</span>
-                  <span className="goal-achieved font-mono">3.67m &rarr; 3.48m (-5.1%)</span>
+                  <span className="goal-target font-mono">Meta: &ge; {WAIT_REDUCTION_GOAL_PCT}% red.</span>
+                  <span className="goal-achieved font-mono">
+                    {formatFixed(baseWait, 2)}m &rarr; {formatFixed(optWait, 2)}m ({formatSigned(waitDeltaPct, 1, '%')})
+                  </span>
                 </div>
-                <p className="goal-desc">Mejora sustancial en corredores de transbordo y estaciones intermedias.</p>
+                <p className="goal-desc">
+                  {waitGoalMet
+                    ? 'La reducción de la espera media alcanza la meta fijada en el Avance II.'
+                    : `La espera media mejora, pero aún no alcanza la meta del ${WAIT_REDUCTION_GOAL_PCT}% fijada en el Avance II.`}
+                </p>
               </div>
 
               <div className="goal-item-card">
                 <div className="goal-top">
                   <span className="goal-title">Uso Total de Flota (B_usados)</span>
-                  <span className="goal-status-pill ok">100% CUMPLE</span>
+                  <span className={`goal-status-pill ${optFleet !== undefined && optFleet <= MAX_FLEET ? 'ok' : 'partial'}`}>
+                    {optFleet !== undefined && optFleet <= MAX_FLEET ? 'CUMPLE' : 'EXCEDIDO'}
+                  </span>
                 </div>
                 <div className="goal-vals">
-                  <span className="goal-target font-mono">Meta: &le; 106 buses</span>
-                  <span className="goal-achieved font-mono">96 / 106 buses (-10 fl.)</span>
+                  <span className="goal-target font-mono">Meta: &le; {MAX_FLEET} buses</span>
+                  <span className="goal-achieved font-mono">
+                    {optFleet ?? PLACEHOLDER} / {MAX_FLEET} buses
+                    {fleetSaved !== undefined && ` (-${fleetSaved} fl.)`}
+                  </span>
                 </div>
                 <p className="goal-desc">Respeto estricto del límite presupuestal: $0 costo de capital adicional.</p>
               </div>
@@ -791,23 +840,29 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="goal-item-card">
                 <div className="goal-top">
                   <span className="goal-title">Ganancia de Utilidad (&Delta;U)</span>
-                  <span className="goal-status-pill ok">100% CUMPLE</span>
+                  <span className={`goal-status-pill ${deltaU !== undefined && deltaU > 0 ? 'ok' : 'partial'}`}>
+                    {deltaU !== undefined && deltaU > 0 ? 'CUMPLE' : 'SIN GANANCIA'}
+                  </span>
                 </div>
                 <div className="goal-vals">
                   <span className="goal-target font-mono">Meta: &Delta;U &gt; 0 (Meseta)</span>
-                  <span className="goal-achieved font-mono">&Delta;U = +0.0734</span>
+                  <span className="goal-achieved font-mono">&Delta;U = {formatSigned(deltaU, 4)}</span>
                 </div>
-                <p className="goal-desc">Convergencia monotónica hacia una meseta estable en Simulated Annealing.</p>
+                <p className="goal-desc">Mejor utilidad encontrada por el Recocido Simulado frente a la línea base.</p>
               </div>
 
               <div className="goal-item-card">
                 <div className="goal-top">
                   <span className="goal-title">Sobrecupo Crítico (&ge; 95%)</span>
-                  <span className="goal-status-pill ok">CONTENIDO</span>
+                  <span className={`goal-status-pill ${overcrowdContained ? 'ok' : 'partial'}`}>
+                    {overcrowdContained ? 'CONTENIDO' : 'AUMENTÓ'}
+                  </span>
                 </div>
                 <div className="goal-vals">
                   <span className="goal-target font-mono">Meta: Contención</span>
-                  <span className="goal-achieved font-mono">7.4% &rarr; 7.6% (Estable)</span>
+                  <span className="goal-achieved font-mono">
+                    {formatFixed(baseOvercrowd, 1)}% &rarr; {formatFixed(optOvercrowd, 1)}%
+                  </span>
                 </div>
                 <p className="goal-desc">Evita trasladar el hacinamiento extremo a servicios paralelos.</p>
               </div>

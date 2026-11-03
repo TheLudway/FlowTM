@@ -54,20 +54,25 @@ graph LR
 
 ---
 
-## 🏆 Impacto Comprobado del Agente Racional
+## 🏆 Resultados del Agente Racional
 
-| Métrica Operacional | Escenario Base (GTFS Vigente) | Escenario Optimizado (FlowTM) | Impacto Obtenido |
+Resultados reproducibles de `scripts/03_optimizar_frecuencias.py` (30 iteraciones de Recocido Simulado, semilla `42`, franja 06:00–09:00):
+
+| Métrica Operacional | Escenario Base (GTFS Vigente) | Escenario Optimizado (FlowTM) | Variación |
 | :--- | :---: | :---: | :---: |
-| **Flota Física en Circulación** | 106 buses | **96 buses** | **-10 buses físicos liberados (-9.4%)** |
-| **Tiempo Medio de Espera en Andén ($\bar{W}$)** | 3.67 min (220.2 s) | **3.48 min (208.8 s)** | **-5.17% promedio global (hasta -22% en transbordos)** |
-| **Factor de Ocupación Vehicular Promedio** | 88.1% (hacinamiento) | **82.4% (rango óptimo)** | **Distribución homogénea y confortable** |
-| **Regularidad de Salidas (CV Headways)** | 0.42 | **0.28** | **-33.3% mitigación de *bus bunching*** |
-| **Ganancia Neta de Utilidad Multi-Criterio** | $U_0 = 0.6120$ | **$U^* = 0.6854$** | **$\Delta U = +0.0734$ (Mejora significativa)** |
-| **Entregable Estándar Interoperable** | Horarios estáticos | `frequencies.txt` | **100% compatible con estándar GTFS MobilityData** |
+| **Flota física requerida** $\sum_r \lceil T_r / h_r \rceil$ | 106 buses | **92 buses** | **-14 buses (-13.2%)** |
+| **Tiempo medio de espera en andén** ($\bar{W}$) | 3.67 min | **3.45 min** | **-6.1%** |
+| **Buses con sobrecupo crítico** (≥ 95%) | 7.4% | **6.4%** | -1.0 pts |
+| **Pasajeros varados al corte** (09:00) | 1,273 | 1,322 | +3.8% |
+| **Pasajeros transportados** | 48,899 | 48,850 | -0.1% |
+| **Ocupación promedio de la flota** | 43.1% | 42.8% | -0.3 pts |
+| **Utilidad multicriterio** $U(S)$ (costo negativo) | $U_0 = -1.9981$ | **$U^* = -1.8602$** | **$\Delta U = +0.1379$** |
+| **Entregable** | Horarios estáticos | `frequencies.txt` | Estándar GTFS |
 
 > [!NOTE]
-> **Aclaración Técnica: Despachos Totales (347) vs Flota Física (96 / 106):**
-> La flota física corresponde a los vehículos tangibles en operación continua sobre el corredor. Dado que el tiempo de ciclo promedio de ida y vuelta es de ~40 minutos, cada bus físico rota aproximadamente 3.6 veces a lo largo de las 3 horas de simulación pico (180 min), generando un total acumulado de **347 despachos troncales**.
+> **Lectura de los resultados.** El agente libera 14 buses manteniendo prácticamente el mismo volumen transportado y reduciendo la espera media un 6.1%. La mejora es moderada: la meta del Avance II de reducir la espera en ≥ 15% **aún no se alcanza**, y los pasajeros varados al corte aumentan ligeramente (+3.8%).
+>
+> **Flota física vs. despachos.** La flota física (92 buses) es el número de vehículos distintos necesarios para sostener los intervalos. Como cada bus completa varios ciclos en las 3 horas, el escenario optimizado registra **354 despachos** (420 en el escenario base).
 
 ---
 
@@ -79,11 +84,11 @@ graph LR
 ├──────────────────────────┬─────────────────────────────┤
 │ Backend & Simulación     │ Python 3.12, SimPy, uv      │
 │ In-Memory Data Pipeline  │ Apache Arrow, Polars, ZSTD  │
-│ Inteligencia Artificial  │ Simulated Annealing, NumPy  │
+│ Inteligencia Artificial  │ Simulated Annealing (SA)    │
 │ Frontend OCC             │ React 19, TypeScript, Bun   │
 │ Motor Geoespacial WebGL  │ MapLibre GL JS 5.x (60 FPS) │
 │ Estándar de Transporte   │ General Transit Feed (GTFS) │
-│ Testing & Calidad        │ Pytest (10/10 tests)        │
+│ Testing & Calidad        │ Pytest (15 tests), Ruff     │
 └──────────────────────────┴─────────────────────────────┘
 ```
 
@@ -115,8 +120,11 @@ uv run python scripts/01_preparar_escenario.py
 # Paso 2: Ejecutar simulación del Escenario Base (106 buses)
 uv run python scripts/02_correr_simulador_base.py
 
-# Paso 3: Optimizar frecuencias con el Agente Heurístico (96 buses)
+# Paso 3: Optimizar frecuencias con el Agente Heurístico (cota <= 106 buses)
 uv run python scripts/03_optimizar_frecuencias.py
+
+# Paso 4: Exportar la telemetría y los resultados al frontend (frontend/public/data)
+uv run python scripts/export_frontend_data.py
 ```
 
 ### 3. Iniciar el Centro de Control de Operaciones (OCC)
@@ -136,7 +144,7 @@ uv run pytest tests -v
 
 Verificación esperada:
 ```text
-======================== 10 passed in 0.47s =========================
+============================== 15 passed in 1.4s ==============================
 ```
 
 ---

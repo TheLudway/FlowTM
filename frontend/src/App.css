@@ -2038,6 +2038,18 @@
   border-color: #BBF7D0;
 }
 
+.goal-status-pill.partial {
+  background: rgba(243, 156, 18, 0.14);
+  color: var(--accent-yellow);
+  border: 1px solid rgba(243, 156, 18, 0.35);
+}
+
+[data-theme="light"] .goal-status-pill.partial {
+  background: #FEF3C7;
+  color: #B45309;
+  border-color: #FDE68A;
+}
+
 .goal-vals {
   display: flex;
   flex-direction: column;
