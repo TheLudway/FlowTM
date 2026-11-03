@@ -13,9 +13,9 @@ Executes the baseline scenario simulation using TransMilenio GTFS peak dispatch 
 FlowTM - Digital Twin Engine
 """
 
-import json
 from pathlib import Path
 
+from flowtm.simulation.collector import export_summary_metrics
 from flowtm.simulation.engine import CorridorSimulator
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -60,18 +60,7 @@ print("=" * 80)
 # Export telemetry for OCC Dashboard and visualization layers
 telemetry_dir = scenario_dir / "telemetria_base"
 simulator.collector.export_telemetry(telemetry_dir)
-
-# Save exact calibrated benchmark summary metrics
-summary_metrics = {
-    "avg_waiting_time_min": round(results.avg_waiting_time_min, 2),
-    "avg_occupancy_pct": round(results.avg_occupancy_rate * 100, 1),
-    "overcrowded_buses_pct": round(results.overcrowded_bus_pct, 1),
-    "total_passengers_served": int(results.total_transported_passengers),
-    "stranded_passengers_in_queue": int(results.stranded_passengers_in_queue),
-    "total_dispatched_buses": int(results.total_dispatched_buses),
-}
-with open(telemetry_dir / "metricas_resumen.json", "w", encoding="utf-8") as f:
-    json.dump(summary_metrics, f, indent=2)
+export_summary_metrics(results, telemetry_dir)
 
 print(
     "[INFO] Telemetría de buses, colas y metricas_resumen.json exportadas para el OCC."

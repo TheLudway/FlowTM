@@ -6,10 +6,15 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+import json
 from pathlib import Path
 
 from flowtm.domain.models import Passenger, Station
 from flowtm.domain.state import ScheduleState
+from flowtm.simulation.collector import (
+    SUMMARY_METRICS_FILENAME,
+    export_summary_metrics,
+)
 from flowtm.simulation.dwell_time import calculate_dwell_time_sec
 from flowtm.simulation.engine import CorridorSimulator
 
@@ -96,3 +101,22 @@ def test_corridor_simulation_is_reproducible_with_seed(synthetic_scenario_dir: P
     assert first.avg_waiting_time_min == second.avg_waiting_time_min
     assert first.total_transported_passengers == second.total_transported_passengers
     assert first.stranded_passengers_in_queue == second.stranded_passengers_in_queue
+
+
+def test_export_summary_metrics_matches_simulation(
+    synthetic_scenario_dir: Path, tmp_path: Path
+):
+    headways = {"B13": 3.0, "B18": 4.0, "B23": 5.0, "B27": 4.0, "B74": 6.0, "B75": 3.0}
+    result = CorridorSimulator(synthetic_scenario_dir).simulate(
+        headways, duration_hours=1.0
+    )
+
+    metrics_file = export_summary_metrics(result, tmp_path / "telemetria_opt")
+    metrics = json.loads(metrics_file.read_text(encoding="utf-8"))
+
+    assert metrics_file.name == SUMMARY_METRICS_FILENAME
+    assert metrics["avg_waiting_time_min"] == round(result.avg_waiting_time_min, 2)
+    assert metrics["total_dispatched_buses"] == result.total_dispatched_buses
+    assert metrics["stranded_passengers_in_queue"] == (
+        result.stranded_passengers_in_queue
+    )
