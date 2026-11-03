@@ -11,7 +11,7 @@ flowtm.optimization.simulated_annealing
 =======================================
 Heuristic search metaheuristic for dispatch schedule optimization.
 Applies Metropolis acceptance probability over discrete headway candidate states
-subject to physical fleet constraints (B_max <= 106 buses).
+subject to the physical fleet constraint (B_total <= B_max).
 """
 
 import math
@@ -28,8 +28,8 @@ from flowtm.simulation.engine import CorridorSimulator
 class SimulatedAnnealingOptimizer:
     """
     Optimizes trunk corridor dispatch headways to maximize passenger throughput,
-    minimize platform wait times, contain overcrowding, and strictly enforce
-    the 106 bus physical fleet constraint.
+    minimize platform wait times and contain overcrowding while strictly enforcing
+    the physical fleet constraint of the schedule state (``max_fleet``).
     """
 
     def __init__(
@@ -38,13 +38,41 @@ class SimulatedAnnealingOptimizer:
         iterations: int = 30,
         initial_temp: float = 75.0,
         cooling_rate: float = 0.88,
+        seed: int | None = 42,
+        verbose: bool = True,
     ) -> None:
         self.simulator = CorridorSimulator(scenario_dir)
         self.utility_calc = UtilityCalculator()
         self.iterations = iterations
         self.initial_temp = initial_temp
         self.cooling_rate = cooling_rate
+        # Dedicated generator so neighbor generation and Metropolis acceptance are
+        # reproducible without touching the global `random` state.
+        self.rng = random.Random(seed)
+        self.verbose = verbose
         self.history: list[dict[str, Any]] = []
+
+    def _log(self, message: str) -> None:
+        if self.verbose:
+            print(message)
+
+    def _format_progress(
+        self,
+        label: str,
+        iteration: int,
+        temperature: float,
+        utility: float,
+        result: SimulationResult,
+        state: ScheduleState,
+        fleet: int,
+    ) -> str:
+        return (
+            f"[INFO] {label:<12} Iter {iteration:2d} | T: {temperature:5.1f} | "
+            f"U(S): {utility:.4f} | "
+            f"Espera: {result.avg_waiting_time_min:.2f}m | "
+            f"Varados: {result.stranded_passengers_in_queue:,} | "
+            f"Flota: {fleet}/{state.max_fleet} | {state.headways}"
+        )
 
     def optimize(
         self, initial_state: ScheduleState
@@ -54,11 +82,24 @@ class SimulatedAnnealingOptimizer:
 
         Args:
             initial_state: Baseline ScheduleState with starting route headways.
+                It must satisfy the fleet constraint.
 
         Returns:
-            Tuple of (best_state, best_simulation_result).
+            Tuple of (best_state, best_simulation_result). ``best_state`` always
+            satisfies ``is_fleet_feasible()``.
+
+        Raises:
+            ValueError: If ``initial_state`` exceeds its fleet capacity.
         """
+        if not initial_state.is_fleet_feasible():
+            raise ValueError(
+                "El estado inicial requiere "
+                f"{initial_state.total_fleet_used()} buses y supera la flota "
+                f"máxima de {initial_state.max_fleet}."
+            )
+
         self.history.clear()
+        max_fleet = initial_state.max_fleet
         current_state = initial_state
         current_result = self.simulator.simulate(current_state.headways)
         current_fleet = current_state.total_fleet_used()
@@ -70,20 +111,21 @@ class SimulatedAnnealingOptimizer:
         best_state = current_state
         best_result = current_result
         best_utility = current_utility
-        best_fleet = current_fleet
 
         temperature = self.initial_temp
 
-        print("=" * 80)
-        print(f"[SEARCH] Rational Agent Optimization ({self.iterations} iterations):")
-        print(
-            f"   [BASE] U(S): {current_utility:.4f} | Wait: {current_result.avg_waiting_time_min:.2f}m | "
-            f"Stranded: {current_result.stranded_passengers_in_queue:,} | "
-            f"Fleet: {current_fleet}/106 | Schedule: {current_state.headways}"
+        self._log("=" * 80)
+        self._log(
+            f"[INFO] Optimización del agente racional ({self.iterations} iteraciones)"
         )
-        print("=" * 80)
+        self._log(
+            f"[INFO] Base: U(S): {current_utility:.4f} | "
+            f"Espera: {current_result.avg_waiting_time_min:.2f}m | "
+            f"Varados: {current_result.stranded_passengers_in_queue:,} | "
+            f"Flota: {current_fleet}/{max_fleet} | Horario: {current_state.headways}"
+        )
+        self._log("=" * 80)
 
-        # Record initial baseline at iteration 0
         self.history.append(
             {
                 "iteration": 0,
@@ -103,7 +145,7 @@ class SimulatedAnnealingOptimizer:
         )
 
         for i in range(1, self.iterations + 1):
-            neighbor = current_state.generate_neighbor(step_min=0.5)
+            neighbor = current_state.generate_neighbor(step_min=0.5, rng=self.rng)
             neighbor_fleet = neighbor.total_fleet_used()
             neighbor_result = self.simulator.simulate(neighbor.headways)
             neighbor_breakdown = self.utility_calc.evaluate_breakdown(
@@ -113,50 +155,65 @@ class SimulatedAnnealingOptimizer:
 
             delta_u = neighbor_utility - current_utility
 
-            # Metropolis acceptance criterion
+            # Metropolis acceptance criterion. Infeasible neighbors are never
+            # accepted, so the fleet bound holds by construction and not only
+            # through the utility penalty.
             accept = False
-            if delta_u > 0:
-                accept = True
-            else:
-                prob = math.exp(delta_u / max(1e-5, temperature))
-                if random.random() < prob:
+            if neighbor.is_fleet_feasible():
+                if delta_u > 0:
                     accept = True
+                else:
+                    prob = math.exp(delta_u / max(1e-5, temperature))
+                    accept = self.rng.random() < prob
 
             is_new_best = False
             if accept:
                 current_state = neighbor
                 current_result = neighbor_result
                 current_utility = neighbor_utility
+                current_breakdown = neighbor_breakdown
                 current_fleet = neighbor_fleet
 
-                if current_utility > best_utility and current_fleet <= 106:
+                if current_utility > best_utility:
                     best_state = current_state
                     best_result = current_result
                     best_utility = current_utility
-                    best_fleet = current_fleet
                     is_new_best = True
-                    print(
-                        f"   [NEW OPTIMUM] Iter {i:2d} | T: {temperature:5.1f} | "
-                        f"U(S): {best_utility:.4f} (ΔU: {best_utility - self.history[0]['utility']:+.4f}) | "
-                        f"Wait: {best_result.avg_waiting_time_min:.2f}m | "
-                        f"Stranded: {best_result.stranded_passengers_in_queue:,} | "
-                        f"Fleet: {best_fleet}/106 | {best_state.headways}"
+                    self._log(
+                        self._format_progress(
+                            "Nuevo óptimo",
+                            i,
+                            temperature,
+                            best_utility,
+                            best_result,
+                            best_state,
+                            current_fleet,
+                        )
+                        + f" | ΔU total: {best_utility - self.history[0]['utility']:+.4f}"
                     )
                 else:
-                    print(
-                        f"   [ACCEPTED]    Iter {i:2d} | T: {temperature:5.1f} | "
-                        f"U(S): {current_utility:.4f} | "
-                        f"Wait: {current_result.avg_waiting_time_min:.2f}m | "
-                        f"Stranded: {current_result.stranded_passengers_in_queue:,} | "
-                        f"Fleet: {current_fleet}/106 | {current_state.headways}"
+                    self._log(
+                        self._format_progress(
+                            "Aceptado",
+                            i,
+                            temperature,
+                            current_utility,
+                            current_result,
+                            current_state,
+                            current_fleet,
+                        )
                     )
             else:
-                print(
-                    f"   [REJECTED]    Iter {i:2d} | T: {temperature:5.1f} | "
-                    f"U(S): {neighbor_utility:.4f} | "
-                    f"Wait: {neighbor_result.avg_waiting_time_min:.2f}m | "
-                    f"Stranded: {neighbor_result.stranded_passengers_in_queue:,} | "
-                    f"Fleet: {neighbor_fleet}/106 | {neighbor.headways}"
+                self._log(
+                    self._format_progress(
+                        "Rechazado",
+                        i,
+                        temperature,
+                        neighbor_utility,
+                        neighbor_result,
+                        neighbor,
+                        neighbor_fleet,
+                    )
                 )
 
             self.history.append(
@@ -173,16 +230,10 @@ class SimulatedAnnealingOptimizer:
                     "stranded_pax": current_result.stranded_passengers_in_queue,
                     "overcrowded_pct": round(current_result.overcrowded_bus_pct, 1),
                     "fleet_used": current_fleet,
-                    "breakdown": neighbor_breakdown if accept else current_breakdown,
+                    "breakdown": current_breakdown,
                 }
             )
 
             temperature *= self.cooling_rate
 
         return best_state, best_result
-
-    # Backward compatibility alias
-    def optimizar(
-        self, estado_inicial: ScheduleState
-    ) -> tuple[ScheduleState, SimulationResult]:
-        return self.optimize(estado_inicial)

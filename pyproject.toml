@@ -14,8 +14,11 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "marimo>=0.17.6",
+    "pandas>=3.0.5",
     "polars>=1.36.1",
+    "pyarrow>=25.0.1",
     "ruff>=0.16.4",
+    "simpy>=4.1.2",
 ]
 
 [project.scripts]
@@ -85,3 +88,8 @@ line-ending = "auto"
 
 # Format code examples inside docstrings.
 docstring-code-format = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

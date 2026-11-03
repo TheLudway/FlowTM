@@ -30,7 +30,7 @@ OUTPUT_DIR = ROOT_DIR / "frontend/public/data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 print("=" * 80)
-print("FRONTEND DATA EXPORTER - FlowTM DIGITAL TWIN")
+print("EXPORTADOR DE DATOS DEL FRONTEND - GEMELO DIGITAL FlowTM")
 print("=" * 80)
 
 # Load official station infrastructure properties if available
@@ -72,7 +72,7 @@ for row in df_stations.iter_rows(named=True):
 
 with open(OUTPUT_DIR / "stations.json", "w", encoding="utf-8") as f:
     json.dump(stations, f, indent=2, ensure_ascii=False)
-print(f"Exported {len(stations)} enriched stations to stations.json")
+print(f"[INFO] {len(stations)} estaciones enriquecidas exportadas a stations.json")
 
 # 2. Corridor GeoJSON
 features = []
@@ -120,7 +120,7 @@ corridor_geojson = {
 
 with open(OUTPUT_DIR / "corridor.geojson", "w", encoding="utf-8") as f:
     json.dump(corridor_geojson, f, indent=2, ensure_ascii=False)
-print("Exported corridor.geojson")
+print("[INFO] corridor.geojson exportado")
 
 # 3. Routes Configuration
 ROUTES_CONFIG = [
@@ -248,20 +248,20 @@ ROUTES_CONFIG = [
 
 with open(OUTPUT_DIR / "routes.json", "w", encoding="utf-8") as f:
     json.dump(ROUTES_CONFIG, f, indent=2, ensure_ascii=False)
-print("Exported routes.json")
+print("[INFO] routes.json exportado")
 
 
 def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
     """Processes a telemetry directory and writes trajectory, queue, and summary JSON files."""
     if not telemetry_dir.exists():
-        print(f"Skipping {telemetry_dir} (does not exist)")
+        print(f"[ADVERTENCIA] Se omite {telemetry_dir} (no existe)")
         return
 
     buses_parquet = telemetry_dir / "telemetria_buses.parquet"
     colas_parquet = telemetry_dir / "historial_colas.parquet"
 
     if not buses_parquet.exists() or not colas_parquet.exists():
-        print(f"Skipping {telemetry_dir} (missing parquet files)")
+        print(f"[ADVERTENCIA] Se omite {telemetry_dir} (faltan archivos parquet)")
         return
 
     # Bus trajectories
@@ -297,7 +297,7 @@ def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
     traj_filename = f"bus_trajectories{suffix}.json"
     with open(OUTPUT_DIR / traj_filename, "w", encoding="utf-8") as f:
         json.dump(bus_list, f, separators=(",", ":"))
-    print(f"Exported {len(bus_list)} bus trajectories to {traj_filename}")
+    print(f"[INFO] {len(bus_list)} trayectorias de buses exportadas a {traj_filename}")
 
     # Station queues
     df_colas = pl.read_parquet(colas_parquet)
@@ -312,7 +312,9 @@ def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
     queues_filename = f"station_queues{suffix}.json"
     with open(OUTPUT_DIR / queues_filename, "w", encoding="utf-8") as f:
         json.dump(queue_timeline, f, separators=(",", ":"))
-    print(f"Exported {len(queue_timeline)} queue timestamps to {queues_filename}")
+    print(
+        f"[INFO] {len(queue_timeline)} instantes de colas exportados a {queues_filename}"
+    )
 
     # Summary
     avg_occ = float(df_buses["occupancy_pct"].mean())
@@ -363,7 +365,7 @@ def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
     summary_filename = f"summary{suffix}.json"
     with open(OUTPUT_DIR / summary_filename, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
-    print(f"Exported {summary_filename}")
+    print(f"[INFO] {summary_filename} exportado")
 
 
 # 4. Export Baseline Telemetry
@@ -376,11 +378,11 @@ process_telemetry_directory(SCENARIO_DIR / "telemetria_opt", suffix="_opt")
 opt_log_src = SCENARIO_DIR / "telemetria_opt/ai_optimization_log.json"
 if opt_log_src.exists():
     shutil.copyfile(opt_log_src, OUTPUT_DIR / "ai_optimization_log.json")
-    print("Exported ai_optimization_log.json to frontend public")
+    print("[INFO] ai_optimization_log.json exportado a frontend/public")
 
 gtfs_src = SCENARIO_DIR / "telemetria_opt/frequencies.txt"
 if gtfs_src.exists():
     shutil.copyfile(gtfs_src, OUTPUT_DIR / "frequencies.txt")
-    print("Exported frequencies.txt to frontend public")
+    print("[INFO] frequencies.txt exportado a frontend/public")
 
-print("\n[SUCCESS] All OCC and AI frontend assets exported successfully!")
+print("\n[INFO] Todos los recursos del OCC y del agente se exportaron correctamente.")

@@ -33,7 +33,7 @@ opt_telemetry_dir = scenario_dir / "telemetria_opt"
 opt_telemetry_dir.mkdir(parents=True, exist_ok=True)
 
 print("=" * 80)
-print("OPTIMIZATION: HIGH-FIDELITY MULTI-OBJECTIVE HEURISTIC AGENT - FlowTM")
+print("OPTIMIZACIÓN: AGENTE HEURÍSTICO MULTIOBJETIVO - FlowTM")
 print("Avance II: Formulación del Problema como Agente Inteligente")
 print("=" * 80)
 
@@ -50,8 +50,8 @@ base_headways: dict[str, float] = {
 base_state = ScheduleState(headways=base_headways)
 base_fleet = base_state.total_fleet_used()
 
-print(f"\n[BASELINE] Initial Schedule: {base_headways}")
-print(f"[BASELINE] Fleet Consumed: {base_fleet}/106 buses")
+print(f"\n[INFO] Horario inicial (base): {base_headways}")
+print(f"[INFO] Flota requerida (base): {base_fleet}/{base_state.max_fleet} buses")
 
 base_simulator = CorridorSimulator(scenario_dir)
 base_results = base_simulator.simulate(base_headways)
@@ -74,17 +74,17 @@ best_breakdown = utility_calc.evaluate_breakdown(
 best_utility = best_breakdown["utility"]
 
 # 3. Simulate winning schedule and export optimized telemetry
-print("\nExporting optimized scenario telemetry...")
+print("\n[INFO] Exportando telemetría del escenario optimizado...")
 opt_simulator = CorridorSimulator(scenario_dir)
 opt_results = opt_simulator.simulate(best_state.headways)
 opt_simulator.collector.export_telemetry(opt_telemetry_dir)
-print(f"Optimized telemetry saved to: {opt_telemetry_dir}")
+print(f"[INFO] Telemetría optimizada guardada en: {opt_telemetry_dir}")
 
 # 4. Export GTFS frequencies.txt (Official PEAS Actuator)
 gtfs_file = export_gtfs_frequencies(
     best_state.headways, opt_telemetry_dir / "frequencies.txt"
 )
-print(f"PEAS Actuator: GTFS schedule exported to {gtfs_file}")
+print(f"[INFO] Actuador PEAS: horario GTFS exportado en {gtfs_file}")
 
 # 5. Export AI Optimization Convergence History
 opt_log_path = opt_telemetry_dir / "ai_optimization_log.json"
@@ -114,7 +114,7 @@ opt_log_data = {
 }
 with open(opt_log_path, "w", encoding="utf-8") as f:
     json.dump(opt_log_data, f, indent=2)
-print(f"AI convergence history log exported to: {opt_log_path}")
+print(f"[INFO] Historial de convergencia del agente exportado en: {opt_log_path}")
 
 # 6. Success Metrics Verification Table (Section 8 of Document)
 delta_wait = (
@@ -139,33 +139,31 @@ delta_overcrowded = opt_results.overcrowded_bus_pct - base_results.overcrowded_b
 delta_u = best_utility - base_utility
 
 print("\n" + "=" * 80)
-print("FINAL RESULTS: COMPLIANCE WITH AVANCE II ACADEMIC GOALS (Section 8)")
+print("RESULTADOS FINALES: CUMPLIMIENTO DE METAS DEL AVANCE II (Sección 8)")
 print("=" * 80)
 print(
-    f"{'METRIC':<32} | {'GOAL (Section 8)':<20} | {'BASE':<10} | {'OPTIMIZED':<10} | {'STATUS'}"
+    f"{'MÉTRICA':<32} | {'META (Sección 8)':<20} | {'BASE':<10} | {'OPTIMIZADO':<10} | {'ESTADO'}"
 )
 print("-" * 80)
 
-status_wait = (
-    "CUMPLE [OK]" if delta_wait <= -15.0 else f"ALCANZADO ({delta_wait:+.1f}%)"
-)
+status_wait = "CUMPLE" if delta_wait <= -15.0 else f"ALCANZADO ({delta_wait:+.1f}%)"
 print(
     f"{'Tiempo Medio Espera (W_prom)':<32} | {'Reducción >= 15%':<20} | {base_results.avg_waiting_time_min:>8.2f}m | {opt_results.avg_waiting_time_min:>8.2f}m | {status_wait}"
 )
 
 status_stranded = (
-    "CUMPLE [OK]" if delta_stranded <= -25.0 else f"ALCANZADO ({delta_stranded:+.1f}%)"
+    "CUMPLE" if delta_stranded <= -25.0 else f"ALCANZADO ({delta_stranded:+.1f}%)"
 )
 print(
     f"{'Pasajeros en Andén (Q_rem)':<32} | {'Reducción >= 25%':<20} | {base_results.stranded_passengers_in_queue:>8,d}  | {opt_results.stranded_passengers_in_queue:>8,d}  | {status_stranded}"
 )
 
-status_fleet = "CUMPLE [OK]" if best_fleet <= 106 else "EXCEDIDO [FAIL]"
+status_fleet = "CUMPLE" if best_state.is_fleet_feasible() else "EXCEDIDO"
 print(
-    f"{'Uso Total de Flota (B_usados)':<32} | {'<= 106 buses':<20} | {base_fleet:>8d}  | {best_fleet:>8d}  | {status_fleet}"
+    f"{'Uso Total de Flota (B_usados)':<32} | {f'<= {best_state.max_fleet} buses':<20} | {base_fleet:>8d}  | {best_fleet:>8d}  | {status_fleet}"
 )
 
-status_u = "CUMPLE [OK]" if delta_u > 0 else "SIN GANANCIA"
+status_u = "CUMPLE" if delta_u > 0 else "SIN GANANCIA"
 print(
     f"{'Ganancia Utilidad (ΔU)':<32} | {'ΔU > 0 (Meseta)':<20} | {base_utility:>8.2f}  | {best_utility:>8.2f}  | {status_u} (ΔU={delta_u:+.2f})"
 )

@@ -26,7 +26,7 @@ scenario_dir = ROOT_DIR / "data/scenarios/piloto"
 scenario_dir.mkdir(parents=True, exist_ok=True)
 
 print("=" * 80)
-print("EXTRACTOR: FULL DAY DEMAND (04:00 - 23:00) AND GEODETIC TOPOLOGY - FlowTM")
+print("EXTRACTOR: DEMANDA DÍA COMPLETO (04:00 - 23:00) Y TOPOLOGÍA GEODÉSICA - FlowTM")
 print("=" * 80)
 
 # 2. Topology and Real Metric Distances from Infrastructure Coordinates
@@ -248,7 +248,7 @@ df_weights = df_alightings.with_columns(
 ).select(["CODIGO_ESTACION", pl.col("res_peso").alias("peso_atraccion")])
 df_weights.write_parquet(scenario_dir / "pesos_descenso.parquet")
 
-print(f"[SUCCESS] Corridor topology saved: {len(STATIONS_GEO)} stations included.")
-print(f"[SUCCESS] Demand generated for weekdays: {len(df_demand_day)} time bins.")
-print("[SUCCESS] Alighting attraction weights calibrated from clean tap-out data.")
+print(f"[INFO] Topología del corredor guardada: {len(STATIONS_GEO)} estaciones.")
+print(f"[INFO] Demanda de días hábiles generada: {len(df_demand_day)} franjas.")
+print("[INFO] Pesos de atracción de descensos calibrados con salidas limpias.")
 print("=" * 80)
