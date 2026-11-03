@@ -21,58 +21,63 @@ Para una revisión exhaustiva de la formulación matemática, arquitectura, algo
 | :---: | :--- | :--- |
 | 📖 **Home** | [**Wiki Oficial de FlowTM**](https://github.com/TheLudway/FlowTM/wiki/Home) | Portada, mapa temático, ficha técnica y licenciamiento abierto. |
 | 📐 **Proyecto** | [**Información General y Modelado Físico**](https://github.com/TheLudway/FlowTM/wiki/Info-General) | Los 8 modelos analíticos acoplados (Poisson NHPP, colas $Q(t)$, TCQSM dwell time, cinemática Haversine, bunching y ley de flota). |
-| 🏛️ **Proyecto** | [**Arquitectura de Software y Patrones**](https://github.com/TheLudway/FlowTM/wiki/Arquitectura) | Clean Architecture Hexagonal, patrones GoF (Repository, Observer, Strategy, State), in-memory con Polars/Arrow y resolución del Issue #19. |
-| 🤖 **IA & Sim** | [**Agente Racional y Optimización Heurística**](https://github.com/TheLudway/FlowTM/wiki/Agente-IA-Optimizacion) | Formulación PEAS (Avance II), función de utilidad $U(S)$, cota física $\le 106$ buses, Recocido Simulado en $\mathbb{R}^6$ y matriz de metas. |
+| 🏛️ **Proyecto** | [**Arquitectura de Software y Patrones**](https://github.com/TheLudway/FlowTM/wiki/Arquitectura) | Clean Architecture Hexagonal, patrones GoF (Observer, Strategy, State), in-memory con Polars/Arrow y resolución del Issue #19. |
+| 🤖 **IA & Sim** | [**Agente Racional y Optimización Heurística**](https://github.com/TheLudway/FlowTM/wiki/Agente-IA-Optimizacion) | Formulación PEAS, utilidad esperada $U(S)$, cota física de flota, recocido simulado calibrado, comparación de algoritmos y validación fuera de muestra. |
 | 🖥️ **IA & Sim** | [**Centro de Control de Operaciones (OCC)**](https://github.com/TheLudway/FlowTM/wiki/Centro-de-Control-OCC) | Arquitectura React 19 + MapLibre GL a 60 FPS, tokens de diseño HSL, modo split-screen, inspector vehicular y analítica en 4 fases. |
 | 🚀 **IA & Sim** | [**Guía de Ejecución y Reproducibilidad**](https://github.com/TheLudway/FlowTM/wiki/Simulador-Guia-Ejecucion) | Manual paso a paso con `uv` y `bun`, pipelines de datos (`01`, `02`, `03`), exportador GTFS y suite de pruebas `pytest`. |
 
 ---
 
-## 📌 Alcance Operativo del Corredor Modelado
+## 📌 Alcance del Gemelo Digital (derivado de datos abiertos)
+
+Todo el escenario se construye con `scripts/01_preparar_escenario.py` a partir del **GTFS oficial de TransMilenio (27/07/2026)** y de las **validaciones y salidas limpias del recaudo** (`*_clean.parquet`); no hay rutas, intervalos ni tiempos escritos a mano.
 
 ```mermaid
 graph LR
-    subgraph Corredor Troncal Caracas - Autonorte [17 Estaciones]
-        C45["Calle 45 (Sur)"] --> MLY["Marly"] --> C76["Calle 76"] --> HEROES["Héroes"]
-        HEROES --> C85["Calle 85"] --> PRADO["Prado"] --> ALCALA["Alcalá"] --> PN["Portal Norte (Norte)"]
-    end
-    subgraph 6 Rutas Troncales
-        B13["B13: Tunal → Norte"]
-        B18["B18: 20 Julio → Norte"]
-        B23["B23: Eldorado → Alcalá"]
-        B27["B27: Tunal → Norte Exp."]
-        B74["B74: Univ. → Norte"]
-        B75["B75: Usme → Norte"]
-    end
+    PN["Portal Norte"] --> TOB["Toberín"] --> ALC["Alcalá"] --> C100["Calle 100"] --> HER["Héroes"] --> C76["Calle 76"] --> FLO["Flores (temporal)"] --> MLY["Marly (temporal)"] --> SUR["Sur: Centro, Calle 26, Caracas Sur"]
 ```
 
-* **Corredor Modelado:** Troncal Caracas – Autopista Norte (Sentido Sur $\rightarrow$ Norte en franja pico matutina 06:00 a 09:00 AM, 180 min de operación continua).
-* **Extensión Topológica:** 17 estaciones consecutivas modeladas desde *Calle 45* hasta *Portal Norte*.
-* **Rutas Troncales Activas:** `B13`, `B18`, `B23`, `B27`, `B74` y `B75`.
-* **Demanda Empírica Calibrada:** 44.93 millones de registros del sistema de recaudo *tullave* (validaciones de entrada y descensos en torniquete) procesados con Apache Arrow y Polars.
-* **Restricción Física Presupuestal:** Cota dura de máximo **106 buses físicos** articulados simultáneos (**$0 USD en gasto de capital / $0 CAPEX**).
+* **Corredor:** Portal Norte → Marly, **sentido sur**, pico AM 06:00–09:00. Los datos confirman la dirección: en la mañana las entradas se concentran al norte y las salidas al sur (Calle 100 recibe 9 veces más salidas que entradas).
+* **Topología:** 19 estaciones operativas según el GTFS. Calle 72, Calle 63 y Calle 45 no tienen servicio troncal en 2026 (obras); las estaciones temporales de la Caracas se cruzan por nombre con sus códigos del recaudo.
+* **Oferta:** los **18 servicios troncales** que cruzan el corredor hacia el sur, con su patrón real de paradas, intervalo medio del pico y tiempos de recorrido por tramo. El agente optimiza **6 servicios** —H13, H75, H27, J74, K23 y L18, contrapartes hacia el sur de B13…B75— y los otros 12 operan con su frecuencia GTFS.
+* **Bahías:** número oficial de vagones por estación (infraestructura troncal) o plataformas GTFS en los portales.
+* **Demanda:** llegadas de Poisson no homogéneas por estación y franja de 15 min desde las validaciones de días hábiles, repartidas por sentido y destino con un modelo gravitacional sobre las salidas AM observadas (el recaudo troncal no registra el destino de cada viaje).
+* **Flota física:** cada ruta optimizable tiene sus buses reales en circuito cerrado (ida + regreso + regulación); si no hay bus en cabecera, la salida se retrasa.
+* **Cota sin CAPEX:** $B_{\max} = 244$ buses, la flota que exige hoy el GTFS para esas 6 rutas con sus regresos (ley de Little por sentido). Validación independiente en el GTFS: 243 buses en viaje en el instante pico + ~13 en regulación.
 
 ---
 
-## 🏆 Resultados del Agente Racional
+## 🧠 El Agente Racional
 
-Resultados reproducibles de `scripts/03_optimizar_frecuencias.py` (30 iteraciones de Recocido Simulado, semilla `42`, franja 06:00–09:00):
+* **Utilidad esperada:** cada horario se evalúa con 5 semillas de simulación usando números aleatorios comunes (reducción de varianza) y en paralelo.
+* **Recocido simulado calibrado:** la temperatura inicial se estima de los datos para aceptar ~80% de los empeoramientos al inicio (regla de Kirkpatrick) y se enfría geométricamente hasta 1% de $T_0$. El vecindario combina intercambios de frecuencia entre rutas y cambios de una sola ruta, y nunca genera horarios que excedan la cota de flota.
+* **Validación fuera de muestra:** el mejor horario se compara con la operación actual en 30 semillas que la búsqueda nunca vio (diferencia pareada, IC 95%).
 
-| Métrica Operacional | Escenario Base (GTFS Vigente) | Escenario Optimizado (FlowTM) | Variación |
+### Resultados (`scripts/03_optimizar_frecuencias.py`, validación con 30 semillas nuevas)
+
+| Indicador | Operación actual (GTFS) | Agente FlowTM | Diferencia (IC 95%) |
 | :--- | :---: | :---: | :---: |
-| **Flota física requerida** $\sum_r \lceil T_r / h_r \rceil$ | 106 buses | **92 buses** | **-14 buses (-13.2%)** |
-| **Tiempo medio de espera en andén** ($\bar{W}$) | 3.67 min | **3.45 min** | **-6.1%** |
-| **Buses con sobrecupo crítico** (≥ 95%) | 7.4% | **6.4%** | -1.0 pts |
-| **Pasajeros varados al corte** (09:00) | 1,273 | 1,322 | +3.8% |
-| **Pasajeros transportados** | 48,899 | 48,850 | -0.1% |
-| **Ocupación promedio de la flota** | 43.1% | 42.8% | -0.3 pts |
-| **Utilidad multicriterio** $U(S)$ (costo negativo) | $U_0 = -1.9981$ | **$U^* = -1.8602$** | **$\Delta U = +0.1379$** |
-| **Entregable** | Horarios estáticos | `frequencies.txt` | Estándar GTFS |
+| **Utilidad multicriterio** $U(S)$ | −2.0243 | **−2.0063** | **+0.0180** [+0.0036, +0.0324] ✅ |
+| **Buses con sobrecupo crítico** (≥ 95%) | 8.10% | **7.52%** | **−7.1%** [−0.89, −0.26 pts] ✅ |
+| Tiempo medio de espera | 3.506 min | 3.517 min | +0.31% [+0.004, +0.018 min] |
+| Pasajeros varados al corte (09:00) | 1,685 | 1,694 | +0.6% (no significativo) |
+| Pasajeros transportados | 54,122 | 54,112 | −0.02% (no significativo) |
+| Flota física | 244 | **243** | −1 bus |
 
 > [!NOTE]
-> **Lectura de los resultados.** El agente libera 14 buses manteniendo prácticamente el mismo volumen transportado. La espera media baja un 6.1% con la semilla de optimización, pero solo un **1.9% en promedio sobre 30 semillas** (IC 95% de la diferencia: [−0.093, −0.042] min; `scripts/04_validar_robustez.py`). La meta del Avance II de reducir la espera en ≥ 15% **aún no se alcanza**, y los pasajeros varados al corte aumentan ligeramente (+3.8%).
->
-> **Flota física vs. despachos.** La flota física (92 buses) es el número de vehículos distintos necesarios para sostener los intervalos. Como cada bus completa varios ciclos en las 3 horas, el escenario optimizado registra **354 despachos** (420 en el escenario base).
+> **Lectura honesta.** El agente encuentra un compromiso: reasigna frecuencia de K23 y L18 (poco cargadas) hacia J74 y H27, reduce el hacinamiento un 7% y libera un bus, a costa de unos segundos más de espera media. Con los pesos del Avance II (0.40 espera, 0.30 sobrecupo, 0.15 varados, 0.15 flota) ese compromiso mejora $U(S)$ de forma significativa. La meta de reducir la espera en ≥ 15% **no es alcanzable** redistribuyendo la flota actual de estas 6 rutas. Los pesos pueden ajustarse en el **Laboratorio IA** del OCC para explorar otros compromisos.
+
+### ¿Por qué recocido simulado? (`scripts/05_comparar_algoritmos.py`)
+
+Mismo presupuesto (100 horarios × 5 semillas), 3 corridas por algoritmo, validación con 30 semillas nuevas:
+
+| Algoritmo | ΔU en validación (media [rango]) | Mejoras significativas |
+| :--- | :---: | :---: |
+| Búsqueda aleatoria | +0.0000 [+0.0000, +0.0000] | 0/3 |
+| Hill climbing | +0.0001 [−0.0051, +0.0106] | 0/3 |
+| **Recocido simulado** | **+0.0179** [+0.0133, +0.0214] | **3/3** |
+
+La búsqueda aleatoria nunca supera al horario diseñado por TransMilenio; hill climbing se estanca en óptimos locales; el recocido simulado escapa de ellos y mejora de forma consistente.
 
 ---
 
@@ -84,11 +89,12 @@ Resultados reproducibles de `scripts/03_optimizar_frecuencias.py` (30 iteracione
 ├──────────────────────────┬─────────────────────────────┤
 │ Backend & Simulación     │ Python 3.12, SimPy, uv      │
 │ In-Memory Data Pipeline  │ Apache Arrow, Polars, ZSTD  │
-│ Inteligencia Artificial  │ Simulated Annealing (SA)    │
+│ Inteligencia Artificial  │ SA calibrado, HC, búsqueda  │
+│ API del agente           │ FastAPI + SSE (en vivo)     │
 │ Frontend OCC             │ React 19, TypeScript, Bun   │
 │ Motor Geoespacial WebGL  │ MapLibre GL JS 5.x (60 FPS) │
 │ Estándar de Transporte   │ General Transit Feed (GTFS) │
-│ Testing & Calidad        │ Pytest (15 tests), Ruff     │
+│ Testing & Calidad        │ Pytest (42 tests), Ruff     │
 └──────────────────────────┴─────────────────────────────┘
 ```
 
@@ -114,40 +120,40 @@ cd ..
 ### 2. Ejecutar Pipelines de Simulación e Inteligencia Artificial
 
 ```bash
-# Paso 1: Procesar datos brutos de TuLlave y GTFS a Parquet
+# Paso 1: Construir el escenario desde el GTFS y el recaudo limpio
 uv run python scripts/01_preparar_escenario.py
 
-# Paso 2: Ejecutar simulación del Escenario Base (106 buses)
+# Paso 2: Simular la operación actual (frecuencias GTFS)
 uv run python scripts/02_correr_simulador_base.py
 
-# Paso 3: Optimizar frecuencias con el Agente Heurístico (cota <= 106 buses)
+# Paso 3: Agente racional (recocido simulado) + validación con 30 semillas nuevas (~1.5 min)
 uv run python scripts/03_optimizar_frecuencias.py
 
 # Paso 4: Exportar la telemetría y los resultados al frontend (frontend/public/data)
 uv run python scripts/export_frontend_data.py
 
-# (Opcional) Validar la robustez del horario optimizado con 30 semillas Monte Carlo
+# (Opcional) Monte Carlo del horario optimizado y experimento de algoritmos (~10 min)
 uv run python scripts/04_validar_robustez.py
+uv run python scripts/05_comparar_algoritmos.py
 ```
 
 ### 3. Iniciar el Centro de Control de Operaciones (OCC)
 
 ```bash
+# Terminal 1: API del agente (necesaria para el Laboratorio IA)
+uv run uvicorn flowtm.api.app:app --port 8000
+
+# Terminal 2: frontend
 cd frontend
 bun run dev
 ```
 
-Abra el navegador en **`http://localhost:5173`** para interactuar con el Centro de Control a 60 FPS, navegar con el scrubber temporal, activar la vista de **Pantalla Dividida** e inspeccionar la telemetría en vivo.
+Abra **`http://localhost:5173`**. Además del mapa y la analítica, la pestaña **Laboratorio IA** permite elegir el algoritmo, el presupuesto, la cota de flota y los pesos de $U(S)$, ver la convergencia del agente en vivo, revisar la validación estadística y cargar el horario encontrado en el mapa comparativo.
 
 ### 4. Ejecutar Suite de Pruebas Automatizadas
 
 ```bash
-uv run pytest tests -v
-```
-
-Verificación esperada:
-```text
-============================== 15 passed in 1.4s ==============================
+uv run pytest tests -q
 ```
 
 ---
