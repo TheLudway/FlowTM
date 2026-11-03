@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   Sun,
 } from '@phosphor-icons/react';
+import { MetricTooltip } from './MetricTooltip';
 import { RouteSelectDropdown } from './RouteSelectDropdown';
 import type { ActiveView, RouteConfig, ThemeMode } from '../types';
 
@@ -103,6 +104,11 @@ export const Header: React.FC<HeaderProps> = ({
             <Brain size={15} weight={activeView === 'agent' ? 'fill' : 'bold'} />
             <span className="tab-label">Laboratorio IA</span>
           </button>
+          <MetricTooltip
+            title="¿Qué hay en cada pestaña?"
+            description="Mapa Troncal: los buses y estaciones del corredor Portal Norte → Marly moviéndose en la simulación. Analítica & KPIs: indicadores, metas del proyecto y el experimento que compara algoritmos. Laboratorio IA: usted configura y ejecuta la IA en vivo."
+            interpretation="Recorrido sugerido: 1) Mapa con Comparar activo, 2) Analítica para ver si la IA cumple las metas, 3) Laboratorio para experimentar."
+          />
         </div>
       </div>
 
@@ -118,6 +124,13 @@ export const Header: React.FC<HeaderProps> = ({
       {/* 3. Right: Route Filter, Active Fleet, Split View & Controls */}
       <div className="header-actions">
         {/* Route Filter Selector (Map View Only) */}
+        {activeView === 'map' && (
+          <MetricTooltip
+            title="Filtrar por ruta"
+            description="Muestra solo los buses de una ruta. Arriba están las 6 rutas que optimiza la IA (H13, H75, H27, J74, K23, L18), equivalentes en sentido sur a B13…B75; abajo las rutas de fondo."
+            interpretation="Útil para seguir cómo cambia la frecuencia de una ruta concreta entre la operación actual y la IA."
+          />
+        )}
         {activeView === 'map' && (
           <RouteSelectDropdown
             routes={routes}
@@ -143,6 +156,11 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="split-btn-label">{isSplitView ? 'Dividida' : 'Comparar'}</span>
           {isSplitView && <span className="split-active-indicator" />}
         </button>
+        <MetricTooltip
+          title="Comparar (pantalla dividida)"
+          description="Divide el mapa en dos: a la izquierda la operación actual de TransMilenio y a la derecha el horario propuesto por la IA, con el mismo reloj y los mismos pasajeros."
+          interpretation="Mire los aros rojos (buses llenos) y los halos de las estaciones (personas esperando) en ambos lados. El panel de telemetría muestra la diferencia en números."
+        />
 
         {/* Single Cycle Theme Toggle Button */}
         <button
