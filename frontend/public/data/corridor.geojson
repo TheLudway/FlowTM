@@ -1,0 +1,426 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "corridor-trunk-lane",
+        "name": "Corredor Troncal Autonorte - Caracas",
+        "stations_count": 17
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -74.046045,
+            4.754623
+          ],
+          [
+            -74.047255,
+            4.746185
+          ],
+          [
+            -74.048,
+            4.741915
+          ],
+          [
+            -74.049226,
+            4.734589
+          ],
+          [
+            -74.049811,
+            4.730891
+          ],
+          [
+            -74.051459,
+            4.721158
+          ],
+          [
+            -74.052558,
+            4.714558
+          ],
+          [
+            -74.055309,
+            4.698127
+          ],
+          [
+            -74.056182,
+            4.692983
+          ],
+          [
+            -74.057712,
+            4.683949
+          ],
+          [
+            -74.05902,
+            4.675997
+          ],
+          [
+            -74.059644,
+            4.672313
+          ],
+          [
+            -74.06031,
+            4.668136
+          ],
+          [
+            -74.062068,
+            4.658238
+          ],
+          [
+            -74.063996,
+            4.652761
+          ],
+          [
+            -74.064871,
+            4.648404
+          ],
+          [
+            -74.067879,
+            4.631452
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02000",
+        "name": "PORTAL NORTE",
+        "official_name": "PORTAL NORTE",
+        "sequence": 1,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.046045,
+          4.754623
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02101",
+        "name": "TOBERIN",
+        "official_name": "TOBERIN",
+        "sequence": 2,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.047255,
+          4.746185
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02102",
+        "name": "CALLE 161",
+        "official_name": "CALLE 161",
+        "sequence": 3,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.048,
+          4.741915
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02103",
+        "name": "MAZUREN",
+        "official_name": "MAZUREN",
+        "sequence": 4,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.049226,
+          4.734589
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02104",
+        "name": "CALLE 146",
+        "official_name": "CALLE 146",
+        "sequence": 5,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.049811,
+          4.730891
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02200",
+        "name": "ALCALA",
+        "official_name": "ALCALA",
+        "sequence": 6,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.051459,
+          4.721158
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02201",
+        "name": "PRADO",
+        "official_name": "PRADO",
+        "sequence": 7,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.052558,
+          4.714558
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02204",
+        "name": "PEPE SIERRA",
+        "official_name": "PEPE SIERRA",
+        "sequence": 8,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.055309,
+          4.698127
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02205",
+        "name": "CALLE 106",
+        "official_name": "CALLE 106",
+        "sequence": 9,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.056182,
+          4.692983
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02300",
+        "name": "CALLE 100",
+        "official_name": "CALLE 100",
+        "sequence": 10,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.057712,
+          4.683949
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02302",
+        "name": "VIRREY",
+        "official_name": "VIRREY",
+        "sequence": 11,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.05902,
+          4.675997
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02303",
+        "name": "CALLE 85",
+        "official_name": "CALLE 85",
+        "sequence": 12,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.059644,
+          4.672313
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "02304",
+        "name": "HEROES",
+        "official_name": "HEROES",
+        "sequence": 13,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.06031,
+          4.668136
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "09122",
+        "name": "CALLE 72",
+        "official_name": "CALLE 72",
+        "sequence": 14,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.062068,
+          4.658238
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "09127",
+        "name": "FLORES",
+        "official_name": "FLORES",
+        "sequence": 15,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.063996,
+          4.652761
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "09120",
+        "name": "CALLE 63",
+        "official_name": "CALLE 63",
+        "sequence": 16,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.064871,
+          4.648404
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "09117",
+        "name": "CALLE 45",
+        "official_name": "CALLE 45",
+        "sequence": 17,
+        "ub_est": "Troncal Caracas - Autonorte",
+        "num_vag": 3,
+        "cap_biart": 120,
+        "cap_art": 200
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.067879,
+          4.631452
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "B13",
+    "name": "Ruta B13",
+    "service": "Troncal Tunal / Autonorte - Caracas",
+    "color": "#E53935",
+    "headway_min": 2.0,
+    "stops": [
+      "02000",
+      "02101",
+      "02102",
+      "02103",
+      "02104",
+      "02200",
+      "02205",
+      "02300",
+      "02303",
+      "09127",
+      "09120",
+      "09117"
+    ],
+    "stops_count": 12
+  },
+  {
+    "id": "B18",
+    "name": "Ruta B18",
+    "service": "Expreso 20 de Julio -> Portal Norte",
+    "color": "#1976D2",
+    "headway_min": 2.0,
+    "stops": [
+      "02000",
+      "02101",
+      "02200",
+      "02204",
+      "02300",
+      "02302",
+      "02304",
+      "09122",
+      "09127"
+    ],
+    "stops_count": 9
+  },
+  {
+    "id": "B23",
+    "name": "Ruta B23",
+    "service": "Expreso Eldorado -> Portal Norte / Alcalá",
+    "color": "#FFA000",
+    "headway_min": 3.0,
+    "stops": [
+      "02000",
+      "02103",
+      "02200",
+      "02201",
+      "02204",
+      "02300",
+      "02303",
+      "09122",
+      "09117"
+    ],
+    "stops_count": 9
+  },
+  {
+    "id": "B27",
+    "name": "Ruta B27",
+    "service": "Expreso Troncal Tunal -> Portal Norte",
+    "color": "#8E24AA",
+    "headway_min": 4.0,
+    "stops": [
+      "02000",
+      "02101",
+      "02104",
+      "02200",
+      "02300",
+      "02302",
+      "02304",
+      "09122",
+      "09117"
+    ],
+    "stops_count": 9
+  },
+  {
+    "id": "B74",
+    "name": "Ruta B74",
+    "service": "Expreso Universidades -> Portal Norte",
+    "color": "#00897B",
+    "headway_min": 4.0,
+    "stops": [
+      "02000",
+      "02101",
+      "02103",
+      "02104",
+      "02201",
+      "02300",
+      "02302",
+      "02304",
+      "09122",
+      "09117"
+    ],
+    "stops_count": 10
+  },
+  {
+    "id": "B75",
+    "name": "Ruta B75",
+    "service": "Expreso Alta Frecuencia Usme -> Portal Norte",
+    "color": "#D84315",
+    "headway_min": 2.0,
+    "stops": [
+      "02000",
+      "02101",
+      "02104",
+      "02200",
+      "02201",
+      "02300",
+      "02304",
+      "09122",
+      "09127",
+      "09120",
+      "09117"
+    ],
+    "stops_count": 11
+  }
+]

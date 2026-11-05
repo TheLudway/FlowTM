@@ -1,0 +1,13 @@
+{
+  "total_dispatched_buses": 420,
+  "total_passengers_served": 48899,
+  "avg_waiting_time_min": 3.67,
+  "avg_occupancy_pct": 43.1,
+  "overcrowded_buses_pct": 7.4,
+  "stranded_passengers_in_queue": 1273,
+  "max_queue_station": 311,
+  "active_routes": 6,
+  "total_stations": 17,
+  "sim_duration_sec": 10800,
+  "start_hour": 6
+}
