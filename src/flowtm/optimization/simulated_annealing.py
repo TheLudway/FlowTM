@@ -42,7 +42,9 @@ class SimulatedAnnealingOptimizer:
         verbose: bool = True,
     ) -> None:
         self.simulator = CorridorSimulator(scenario_dir)
-        self.utility_calc = UtilityCalculator()
+        self.utility_calc = UtilityCalculator(
+            max_fleet=self.simulator.scenario.max_fleet
+        )
         self.iterations = iterations
         self.initial_temp = initial_temp
         self.cooling_rate = cooling_rate

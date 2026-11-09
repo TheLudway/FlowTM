@@ -48,11 +48,8 @@ class Station:
     """
     Represents a BRT station platform and its dynamic passenger queue.
 
-    Glossary & Domain Definitions:
-        - Local service (Corriente): All-stop service that visits every consecutive station.
-        - Express service (Expreso): Skip-stop service that only calls at designated transfer hubs.
-        - Intermediate station: A non-hub station served only by local routes. Passengers heading
-          to or from intermediate stations cannot board express buses.
+    A passenger only boards a bus whose stop pattern (from the GTFS) serves their
+    destination, so express services naturally skip intermediate stations.
 
     Attributes:
         station_code: Canonical 5-digit string identifier matching GTFS stops.
@@ -77,7 +74,7 @@ class Station:
     lon: float
     next_distance_m: float
     travel_time_sec: float
-    current_arrival_rate: float = 0.05
+    current_arrival_rate: float = 0.0
     waiting_queue: list[Passenger] = field(default_factory=list)
     cumulative_waiting_time_sec: float = 0.0
     total_arrivals: int = 0
@@ -118,54 +115,6 @@ class Station:
         self.total_boardings += len(boarded)
         return boarded
 
-    @property
-    def local_queue_count(self) -> int:
-        """Number of waiting passengers destined for intermediate stops (local service only)."""
-        express_hub_codes = {
-            "01000",
-            "01001",
-            "01006",
-            "02000",
-            "02101",
-            "02104",
-            "02200",
-            "02204",
-            "02300",
-            "02304",
-            "08008",
-            "08106",
-            "09117",
-            "09122",
-        }
-        return sum(
-            1
-            for p in self.waiting_queue
-            if p.destination_station not in express_hub_codes
-        )
-
-    @property
-    def express_queue_count(self) -> int:
-        """Number of waiting passengers who can board either express or local services."""
-        express_hub_codes = {
-            "01000",
-            "01001",
-            "01006",
-            "02000",
-            "02101",
-            "02104",
-            "02200",
-            "02204",
-            "02300",
-            "02304",
-            "08008",
-            "08106",
-            "09117",
-            "09122",
-        }
-        return sum(
-            1 for p in self.waiting_queue if p.destination_station in express_hub_codes
-        )
-
 
 @dataclass
 class Bus:
@@ -173,9 +122,10 @@ class Bus:
     Represents an articulated BRT vehicle operating on a specific trunk route.
 
     Attributes:
-        bus_id: Unique string vehicle identifier (e.g. 'B13_1').
-        route: Official route code (e.g. 'B13', 'B18', 'B23', 'B27', 'B74', 'B75').
-        max_capacity: Nominal capacity in passengers (160 for articulated vehicles).
+        bus_id: Unique trip identifier (e.g. 'H13_1').
+        route: Official GTFS route code (e.g. 'H13').
+        max_capacity: Nominal capacity in passengers.
+        vehicle_id: Physical vehicle operating the trip (reused across cycles).
         onboard_passengers: Active list of passengers currently inside the vehicle.
         scheduled_stops: Ordered list of station codes where this service is scheduled to stop.
         occupancy_history: Historical occupancy fraction [0.0, 1.0] recorded at each stop.
@@ -189,6 +139,7 @@ class Bus:
     scheduled_stops: list[str] = field(default_factory=list)
     occupancy_history: list[float] = field(default_factory=list)
     passenger_profile_by_stop: list[dict] = field(default_factory=list)
+    vehicle_id: str = ""
 
     @property
     def total_passengers(self) -> int:
@@ -222,6 +173,9 @@ class SimulationResult:
         total_dispatched_buses: Total vehicle trips dispatched across all routes.
         station_metrics: Per-station summary metrics (arrivals, boardings, wait time).
         route_load_profiles: Per-route load profiles along the corridor stops.
+        avg_dispatch_delay_min: Mean delay of optimizable-route departures caused by
+            vehicles not yet back at the terminal (physical fleet shortage).
+        od_counts: Simulated trips per (origin, destination) pair.
     """
 
     avg_waiting_time_min: float
@@ -232,3 +186,5 @@ class SimulationResult:
     total_dispatched_buses: int
     station_metrics: list[dict] = field(default_factory=list)
     route_load_profiles: dict[str, list[dict]] = field(default_factory=dict)
+    avg_dispatch_delay_min: float = 0.0
+    od_counts: dict[tuple[str, str], int] = field(default_factory=dict)
