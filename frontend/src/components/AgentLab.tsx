@@ -88,21 +88,21 @@ function toLog(
     optimized: summarize(result.mejor),
     delta_utility: result.delta_utilidad,
     max_fleet: maxFleet,
+    holdout: result.validacion,
     optimizable_routes: scenario.rutas_optimizables,
     background_routes: scenario.rutas_fondo,
     history,
   };
 }
 
-const StatRow: React.FC<{ label: string; stat: PairedStat; digits: number; unit?: string; lowerIsBetter?: boolean }> = ({
+const StatRow: React.FC<{ label: string; stat: PairedStat; digits: number; unit?: string; absolute?: boolean }> = ({
   label,
   stat,
   digits,
   unit = '',
-  lowerIsBetter = true,
+  absolute = false,
 }) => {
-  const improved = lowerIsBetter ? stat.diferencia < 0 : stat.diferencia > 0;
-  const tone = !stat.significativo ? 'neutral' : improved ? 'good' : 'bad';
+  const tone = !stat.significativo ? 'neutral' : stat.mejora ? 'good' : 'bad';
   return (
     <div className="lab-stat-row">
       <span className="lab-stat-label">{label}</span>
@@ -111,7 +111,7 @@ const StatRow: React.FC<{ label: string; stat: PairedStat; digits: number; unit?
         {unit}
       </span>
       <span className={`lab-stat-delta tone-${tone} font-mono tabular-nums`}>
-        {fmtSigned(stat.diferencia_pct, 2, '%')}
+        {absolute ? fmtSigned(stat.diferencia, digits) : fmtSigned(stat.diferencia_pct, 2, '%')}
       </span>
       <span className="lab-stat-ci font-mono tabular-nums">
         IC95 [{stat.ic95[0].toFixed(digits)}, {stat.ic95[1].toFixed(digits)}] · {stat.semillas_mejor}/{stat.semillas}
@@ -454,18 +454,22 @@ export const AgentLab: React.FC<{
           <h5 className="lab-subtitle-sm">
             Validación fuera de muestra ({result.validacion.utilidad.semillas} semillas nuevas, diferencia pareada vs. operación actual)
           </h5>
-          <div className={`lab-verdict ${result.validacion.utilidad.significativo ? (result.validacion.utilidad.diferencia > 0 ? 'good' : 'bad') : 'neutral'}`}>
+          <div className={`lab-verdict ${result.validacion.utilidad.significativo ? (result.validacion.utilidad.mejora ? 'good' : 'bad') : 'neutral'}`}>
             {result.validacion.utilidad.significativo
-              ? result.validacion.utilidad.diferencia > 0
+              ? result.validacion.utilidad.mejora
                 ? 'La mejora en utilidad se sostiene con semillas nuevas (IC 95% > 0).'
                 : 'El horario es peor que la operación actual con semillas nuevas.'
               : 'La diferencia en utilidad no es estadísticamente significativa con semillas nuevas.'}
           </div>
-          <StatRow label="Utilidad U(S)" stat={result.validacion.utilidad} digits={4} lowerIsBetter={false} />
+          <StatRow label="Utilidad U(S)" stat={result.validacion.utilidad} digits={4} absolute />
           <StatRow label="Espera media" stat={result.validacion.espera_min} digits={3} unit=" min" />
           <StatRow label="Buses con sobrecupo" stat={result.validacion.sobrecupo_pct} digits={2} unit="%" />
           <StatRow label="Pasajeros varados" stat={result.validacion.varados} digits={0} />
-          <StatRow label="Transportados" stat={result.validacion.transportados} digits={0} lowerIsBetter={false} />
+          <StatRow label="Transportados" stat={result.validacion.transportados} digits={0} />
+          <p className="lab-footnote">
+            Verde/rojo: el intervalo de confianza al 95% de la diferencia pareada excluye el cero (mejora/empeora con
+            significancia). Gris: diferencia no significativa. «a/b»: semillas en las que el horario del agente es mejor.
+          </p>
         </section>
       )}
     </div>

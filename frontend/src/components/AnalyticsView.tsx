@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   ArrowsLeftRight,
@@ -18,7 +18,9 @@ import { MetricTooltip } from './MetricTooltip';
 import type {
   AIOptimizationIteration,
   AIOptimizationLog,
+  AlgorithmComparison,
   InterpolatedBus,
+  PairedStat,
   RouteConfig,
   Station,
   SummaryKPIs,
@@ -51,6 +53,56 @@ const formatSigned = (value: number | undefined, digits: number, suffix = ''): s
 
 const formatFixed = (value: number | undefined, digits: number): string =>
   value === undefined ? PLACEHOLDER : value.toFixed(digits);
+
+const ALGORITHM_NAMES: Record<string, string> = {
+  recocido_simulado: 'Recocido simulado',
+  hill_climbing: 'Hill climbing',
+  busqueda_aleatoria: 'Búsqueda aleatoria',
+};
+
+const GoalCard: React.FC<{
+  title: string;
+  target: string;
+  stat: PairedStat;
+  digits: number;
+  unit?: string;
+  absolute?: boolean;
+  meetsGoal: (stat: PairedStat) => boolean;
+  description: (stat: PairedStat) => string;
+}> = ({ title, target, stat, digits, unit = '', absolute = false, meetsGoal, description }) => {
+  const met = meetsGoal(stat);
+  const label = met
+    ? 'CUMPLE'
+    : !stat.significativo
+      ? 'NO SIGNIFICATIVO'
+      : stat.mejora
+        ? 'PARCIAL'
+        : 'EMPEORA';
+  const change = absolute
+    ? `${stat.diferencia >= 0 ? '+' : ''}${stat.diferencia.toFixed(digits)}`
+    : `${stat.diferencia_pct >= 0 ? '+' : ''}${stat.diferencia_pct.toFixed(2)}%`;
+  return (
+    <div className="goal-item-card">
+      <div className="goal-top">
+        <span className="goal-title">{title}</span>
+        <span className={`goal-status-pill ${met ? 'ok' : 'partial'}`}>{label}</span>
+      </div>
+      <div className="goal-vals">
+        <span className="goal-target font-mono">{target}</span>
+        <span className="goal-achieved font-mono">
+          {stat.base.toFixed(digits)}
+          {unit} &rarr; {stat.candidato.toFixed(digits)}
+          {unit} ({change})
+        </span>
+        <span className="goal-target font-mono">
+          IC 95% [{stat.ic95[0].toFixed(digits)}, {stat.ic95[1].toFixed(digits)}] · mejor en {stat.semillas_mejor}/
+          {stat.semillas} semillas
+        </span>
+      </div>
+      <p className="goal-desc">{description(stat)}</p>
+    </div>
+  );
+};
 
 interface AnalyticsViewProps {
   isSplitView: boolean;
@@ -100,16 +152,22 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const MAX_FLEET: number | string = maxFleet ?? PLACEHOLDER;
   const baseFleet = aiLog?.baseline?.fleet_used;
   const optFleet = aiLog?.optimized?.fleet_used;
+  const holdout = aiLog?.holdout;
+  const [comparison, setComparison] = useState<AlgorithmComparison | null>(null);
+  useEffect(() => {
+    fetch('/data/comparacion_algoritmos.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setComparison)
+      .catch(() => setComparison(null));
+  }, []);
+  const comparisonMaxDelta = comparison
+    ? Math.max(1e-6, ...Object.values(comparison.resumen).map((r) => r.delta_u_validacion_max))
+    : 1;
   const fleetSaved = baseFleet !== undefined && optFleet !== undefined ? baseFleet - optFleet : undefined;
   const baseWait = summary?.avg_waiting_time_min;
   const optWait = summaryOpt?.avg_waiting_time_min;
   const waitDeltaPct = percentChange(baseWait, optWait);
-  const baseOvercrowd = summary?.overcrowded_buses_pct;
-  const optOvercrowd = summaryOpt?.overcrowded_buses_pct;
   const optDispatches = summaryOpt?.total_dispatched_buses;
-  const waitGoalMet = waitDeltaPct !== undefined && waitDeltaPct <= -WAIT_REDUCTION_GOAL_PCT;
-  const overcrowdContained =
-    baseOvercrowd !== undefined && optOvercrowd !== undefined && optOvercrowd <= baseOvercrowd;
 
   // SVG Chart bounds
   const chartMetrics = useMemo(() => {
@@ -771,48 +829,72 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
           </div>
 
-          {/* Quantitative Academic Goals Matrix (Section 8) */}
+          {/* Quantitative goals, judged on out-of-sample seeds (Section 8) */}
           <div className="analytics-section-card">
             <div className="section-card-header">
               <div>
                 <div className="section-title-with-tooltip">
-                  <h4 className="section-card-title">MATRIZ DE CUMPLIMIENTO DE METAS ACADÉMICAS (SECCIÓN 8)</h4>
+                  <h4 className="section-card-title">MATRIZ DE CUMPLIMIENTO DE METAS (SECCIÓN 8)</h4>
                   <MetricTooltip
-                    title="Metas Cuantitativas de Éxito"
-                    description="Criterios formales de evaluación definidos en el Avance II del proyecto para validar el impacto operativo del agente."
-                    interpretation="Verifica que la reasignación algorítmica de frecuencias mejore la oferta sin adquirir flota adicional ($0 costo de capital)."
-                    flowtmGoal="Reducción de espera, contención de sobrecupo y ganancia neta positiva de utilidad."
+                    title="Metas evaluadas fuera de muestra"
+                    description="Cada meta se evalúa con semillas que el agente nunca vio durante la búsqueda: diferencia pareada entre el horario del agente y la operación actual, con intervalo de confianza al 95%."
+                    interpretation="Una meta solo se marca como cumplida si la mejora es estadísticamente significativa; así se evita reportar mejoras que solo existen en la semilla de entrenamiento."
+                    flowtmGoal="Reducción de espera, contención de sobrecupo y ganancia neta positiva de utilidad sin flota adicional."
                   />
                 </div>
                 <p className="section-card-subtitle">
-                  Evaluación cuantitativa de los resultados frente a las cotas fijadas en el documento académico
+                  {holdout
+                    ? `Validación con ${holdout.espera_min.semillas} semillas nuevas (diferencia pareada vs. operación actual, IC 95%).`
+                    : 'Sin validación fuera de muestra en el log del agente.'}
                 </p>
               </div>
-              <span className="verified-badge">
-                <CheckCircle size={14} weight="fill" /> CRITERIOS VERIFICADOS
-              </span>
+              {holdout && (
+                <span className="verified-badge">
+                  <CheckCircle size={14} weight="fill" /> VALIDADO FUERA DE MUESTRA
+                </span>
+              )}
             </div>
 
             <div className="goals-matrix-grid">
-              <div className="goal-item-card">
-                <div className="goal-top">
-                  <span className="goal-title">Tiempo Medio Espera (W_prom)</span>
-                  <span className={`goal-status-pill ${waitGoalMet ? 'ok' : 'partial'}`}>
-                    {waitGoalMet ? 'CUMPLE' : 'PARCIAL'}
-                  </span>
-                </div>
-                <div className="goal-vals">
-                  <span className="goal-target font-mono">Meta: &ge; {WAIT_REDUCTION_GOAL_PCT}% red.</span>
-                  <span className="goal-achieved font-mono">
-                    {formatFixed(baseWait, 2)}m &rarr; {formatFixed(optWait, 2)}m ({formatSigned(waitDeltaPct, 1, '%')})
-                  </span>
-                </div>
-                <p className="goal-desc">
-                  {waitGoalMet
-                    ? 'La reducción de la espera media alcanza la meta fijada en el Avance II.'
-                    : `La espera media mejora, pero aún no alcanza la meta del ${WAIT_REDUCTION_GOAL_PCT}% fijada en el Avance II.`}
-                </p>
-              </div>
+              {holdout && (
+                <>
+                  <GoalCard
+                    title="Tiempo Medio Espera (W_prom)"
+                    target={`Meta: ≥ ${WAIT_REDUCTION_GOAL_PCT}% red.`}
+                    stat={holdout.espera_min}
+                    digits={3}
+                    unit=" min"
+                    meetsGoal={(st) => st.mejora && st.significativo && st.diferencia_pct <= -WAIT_REDUCTION_GOAL_PCT}
+                    description={(st) =>
+                      st.significativo && !st.mejora
+                        ? 'La espera media empeora levemente: el agente prioriza reducir el sobrecupo según los pesos de U(S).'
+                        : `La meta del ${WAIT_REDUCTION_GOAL_PCT}% de reducción de espera no se alcanza con la oferta actual.`
+                    }
+                  />
+                  <GoalCard
+                    title="Ganancia de Utilidad (ΔU)"
+                    target="Meta: ΔU > 0 significativo"
+                    stat={holdout.utilidad}
+                    digits={4}
+                    absolute
+                    meetsGoal={(st) => st.mejora && st.significativo}
+                    description={(st) =>
+                      st.mejora && st.significativo
+                        ? 'La mejora de la utilidad multicriterio se sostiene con semillas nuevas.'
+                        : 'La diferencia de utilidad no es significativa fuera de muestra.'
+                    }
+                  />
+                  <GoalCard
+                    title="Sobrecupo Crítico (≥ 95%)"
+                    target="Meta: reducir el hacinamiento"
+                    stat={holdout.sobrecupo_pct}
+                    digits={2}
+                    unit="%"
+                    meetsGoal={(st) => st.mejora && st.significativo}
+                    description={() => 'Fracción de llegadas de bus a estación con ocupación ≥ 95%.'}
+                  />
+                </>
+              )}
 
               <div className="goal-item-card">
                 <div className="goal-top">
@@ -828,40 +910,59 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     {fleetSaved !== undefined && ` (-${fleetSaved} fl.)`}
                   </span>
                 </div>
-                <p className="goal-desc">Respeto estricto del límite presupuestal: $0 costo de capital adicional.</p>
-              </div>
-
-              <div className="goal-item-card">
-                <div className="goal-top">
-                  <span className="goal-title">Ganancia de Utilidad (&Delta;U)</span>
-                  <span className={`goal-status-pill ${deltaU !== undefined && deltaU > 0 ? 'ok' : 'partial'}`}>
-                    {deltaU !== undefined && deltaU > 0 ? 'CUMPLE' : 'SIN GANANCIA'}
-                  </span>
-                </div>
-                <div className="goal-vals">
-                  <span className="goal-target font-mono">Meta: &Delta;U &gt; 0 (Meseta)</span>
-                  <span className="goal-achieved font-mono">&Delta;U = {formatSigned(deltaU, 4)}</span>
-                </div>
-                <p className="goal-desc">Mejor utilidad encontrada por el Recocido Simulado frente a la línea base.</p>
-              </div>
-
-              <div className="goal-item-card">
-                <div className="goal-top">
-                  <span className="goal-title">Sobrecupo Crítico (&ge; 95%)</span>
-                  <span className={`goal-status-pill ${overcrowdContained ? 'ok' : 'partial'}`}>
-                    {overcrowdContained ? 'CONTENIDO' : 'AUMENTÓ'}
-                  </span>
-                </div>
-                <div className="goal-vals">
-                  <span className="goal-target font-mono">Meta: Contención</span>
-                  <span className="goal-achieved font-mono">
-                    {formatFixed(baseOvercrowd, 1)}% &rarr; {formatFixed(optOvercrowd, 1)}%
-                  </span>
-                </div>
-                <p className="goal-desc">Evita trasladar el hacinamiento extremo a servicios paralelos.</p>
+                <p className="goal-desc">
+                  Cota por construcción: el agente nunca evalúa ni acepta un horario que exceda la flota actual.
+                </p>
               </div>
             </div>
           </div>
+
+          {/* Controlled experiment: SA vs simpler agents with the same budget */}
+          {comparison && (
+            <div className="analytics-section-card">
+              <div className="section-card-header">
+                <div>
+                  <div className="section-title-with-tooltip">
+                    <h4 className="section-card-title">EXPERIMENTO: ¿EL RECOCIDO SIMULADO SUPERA A AGENTES MÁS SIMPLES?</h4>
+                    <MetricTooltip
+                      title="Comparación controlada de algoritmos"
+                      description={`Búsqueda aleatoria, hill climbing y recocido simulado con el mismo presupuesto (${comparison.presupuesto_evaluaciones} horarios × ${comparison.semillas_entrenamiento.length} semillas), ${comparison.corridas_por_algoritmo} corridas cada uno, validados con ${comparison.semillas_validacion} semillas nuevas.`}
+                      interpretation="La búsqueda aleatoria no encuentra horarios mejores que el diseñado por TransMilenio; hill climbing se estanca en óptimos locales; el recocido simulado escapa de ellos aceptando empeoramientos controlados por la temperatura."
+                      flowtmGoal="Justificar empíricamente la elección de la metaheurística."
+                    />
+                  </div>
+                  <p className="section-card-subtitle">
+                    ΔU en validación fuera de muestra (media y rango de {comparison.corridas_por_algoritmo} corridas por algoritmo).
+                  </p>
+                </div>
+              </div>
+              <div className="algo-compare-table">
+                {Object.entries(comparison.resumen).map(([name, row]) => {
+                  const widthPct = Math.max(0, (row.delta_u_validacion_media / comparisonMaxDelta) * 100);
+                  return (
+                    <div className="algo-compare-row" key={name}>
+                      <span className="algo-name">{ALGORITHM_NAMES[name] ?? name}</span>
+                      <div className="algo-bar-track">
+                        <div className="algo-bar-fill" style={{ width: `${widthPct}%` }} />
+                      </div>
+                      <span className="algo-delta font-mono tabular-nums">
+                        {formatSigned(row.delta_u_validacion_media, 4)}{' '}
+                        <span className="text-muted">
+                          [{formatSigned(row.delta_u_validacion_min, 4)}, {formatSigned(row.delta_u_validacion_max, 4)}]
+                        </span>
+                      </span>
+                      <span className="algo-sig font-mono tabular-nums">
+                        {row.corridas_significativas}/{comparison.corridas_por_algoritmo} significativas
+                      </span>
+                      <span className="algo-extra font-mono tabular-nums">
+                        espera {formatSigned(row.espera_pct_media, 2, '%')} · sobrecupo {formatSigned(row.sobrecupo_pct_media, 2, '%')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ==================================================================
