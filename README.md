@@ -159,8 +159,12 @@ uv run pytest tests -q
 ### 5. Ejecutar con Docker Compose
 
 Docker Compose construye el backend FastAPI y el frontend React servido por Nginx.
-El frontend publica también la API bajo `/api`, por lo que solo es necesario abrir
-un puerto:
+Antes de arrancar, asegúrese de tener disponibles los insumos procesados en
+`data/processed/`. El servicio `pipeline` ejecuta automáticamente los pasos
+`01_preparar_escenario.py`, `02_correr_simulador_base.py`,
+`03_optimizar_frecuencias.py` y `export_frontend_data.py`; así genera la
+telemetría que consume el mapa. Estos insumos no se copian a la imagen porque
+ocupan varios GB.
 
 ```bash
 docker compose up --build -d
@@ -168,7 +172,8 @@ docker compose ps
 docker compose logs -f
 ```
 
-Abra **`http://localhost:8080`**. El puerto puede cambiarse con
+El frontend publica también la API bajo `/api`. Abra **`http://localhost:8080`**
+cuando `pipeline` haya terminado y `backend` aparezca como `healthy`. El puerto puede cambiarse con
 `FLOWTM_PORT=9000 docker compose up --build -d`. Para detener los servicios:
 
 ```bash
