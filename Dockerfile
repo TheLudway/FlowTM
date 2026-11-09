@@ -17,6 +17,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
 COPY scripts ./scripts
+COPY notebooks ./notebooks
 COPY data/scenarios ./data/scenarios
 COPY frontend/public/data ./frontend/public/data
 

@@ -11,5 +11,4 @@ data/raw
 data/processed
 docs
 tests
-notebooks
 *.duckdb

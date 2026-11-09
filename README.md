@@ -160,11 +160,12 @@ uv run pytest tests -q
 
 Docker Compose construye el backend FastAPI y el frontend React servido por Nginx.
 Antes de arrancar, asegúrese de tener disponibles los insumos procesados en
-`data/processed/`. El servicio `pipeline` ejecuta automáticamente los pasos
-`01_preparar_escenario.py`, `02_correr_simulador_base.py`,
-`03_optimizar_frecuencias.py` y `export_frontend_data.py`; así genera la
-telemetría que consume el mapa. Estos insumos no se copian a la imagen porque
-ocupan varios GB.
+`data/processed/`. El servicio `pipeline` ejecuta automáticamente los notebooks de conversión y
+limpieza (Marimo) y después los pasos `01_preparar_escenario.py`,
+`02_correr_simulador_base.py`, `03_optimizar_frecuencias.py` y
+`export_frontend_data.py`; así regenera desde cero la telemetría que consume el
+mapa. Los datos crudos y procesados no se copian a la imagen porque ocupan
+varios GB: se montan desde `data/raw/` y `data/processed/`.
 
 ```bash
 docker compose up --build -d
