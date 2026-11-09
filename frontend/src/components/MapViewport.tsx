@@ -66,6 +66,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           properties: {
             bus_id: b.bus_id,
             route: b.route,
+            color: b.color,
             occupancy_pct: b.occupancy_pct,
             passengers: b.passengers,
             is_stopped: b.is_stopped ? 1 : 0,
@@ -340,7 +341,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
         });
       }
 
-      // 3. Pilot Stations (17 key corridor stations with dynamic queues)
+      // 3. Corridor stations (GTFS topology) with dynamic queues
       if (!map.getSource('stations')) {
         const list: Station[] = stationsRef.current.length > 0 ? stationsRef.current : initialStations;
         const stationGeoJSON: FeatureCollection = {
@@ -463,6 +464,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
             properties: {
               bus_id: b.bus_id,
               route: b.route,
+              color: b.color,
               occupancy_pct: b.occupancy_pct,
               passengers: b.passengers,
               is_stopped: b.is_stopped ? 1 : 0,
@@ -501,17 +503,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           source: 'active-buses',
           paint: {
             'circle-radius': ['match', ['get', 'bus_type'], 'biarticulado', 20, 15],
-            'circle-color': [
-              'match',
-              ['get', 'route'],
-              'B13', '#E53935',
-              'B18', '#1976D2',
-              'B23', '#FFA000',
-              'B27', '#8E24AA',
-              'B74', '#00897B',
-              'B75', '#D84315',
-              '#E53935',
-            ],
+            'circle-color': ['coalesce', ['get', 'color'], '#9E9E9E'],
             'circle-opacity': 0.45,
             'circle-blur': 0.5,
           },
@@ -559,17 +551,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           source: 'active-buses',
           paint: {
             'circle-radius': ['match', ['get', 'bus_type'], 'biarticulado', 10.5, 7.5],
-            'circle-color': [
-              'match',
-              ['get', 'route'],
-              'B13', '#E53935',
-              'B18', '#1976D2',
-              'B23', '#FFA000',
-              'B27', '#8E24AA',
-              'B74', '#00897B',
-              'B75', '#D84315',
-              '#E53935',
-            ],
+            'circle-color': ['coalesce', ['get', 'color'], '#9E9E9E'],
             'circle-stroke-width': 2.0,
             'circle-stroke-color': isDark ? '#FFFFFF' : '#1A202C',
           },

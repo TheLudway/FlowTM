@@ -51,7 +51,7 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
     : 0;
   const overcrowdedBuses = activeBuses.filter((b) => b.occupancy_pct >= 85).length;
 
-  // Total waiting queue in platforms across all 17 stations right now
+  // Total waiting queue across all corridor stations right now
   const totalWaitingPax = Object.values(currentQueues).reduce((acc, q) => acc + q, 0);
 
   // Optimized scenario projection
@@ -172,7 +172,7 @@ export const KpiPanel: React.FC<KpiPanelProps> = ({
                   <span className="comp-kpi-title">PASAJEROS EN ESPERA EN ANDÉN</span>
                   <MetricTooltip
                     title="Cola Global en Estaciones"
-                    description="Total de usuarios esperando bus simultáneamente en las 17 estaciones troncales."
+                    description={`Total de usuarios esperando bus simultáneamente en las ${stations.length} estaciones del corredor.`}
                     interpretation="Picos superiores a 1,200 pax provocan saturación en torniquetes y accesos peatonales."
                     flowtmGoal="Evacuar andenes de manera continua mediante inyecciones oportunas de flota."
                   />

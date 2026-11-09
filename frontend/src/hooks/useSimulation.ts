@@ -10,20 +10,26 @@ import type {
   SummaryKPIs,
 } from '../types';
 
-export const ROUTE_TYPOLOGIES: Record<string, { bus_type: BusTypology; capacity: number; length_m: number }> = {
-  B13: { bus_type: 'biarticulado', capacity: 250, length_m: 27 },
-  B27: { bus_type: 'biarticulado', capacity: 250, length_m: 27 },
-  B75: { bus_type: 'biarticulado', capacity: 250, length_m: 27 },
-  B18: { bus_type: 'articulado', capacity: 160, length_m: 18 },
-  B23: { bus_type: 'articulado', capacity: 160, length_m: 18 },
-  B74: { bus_type: 'articulado', capacity: 160, length_m: 18 },
-};
+interface RouteTypology {
+  bus_type: BusTypology;
+  capacity: number;
+  length_m: number;
+}
+
+/** Vehicle typology derived from the capacity published in routes.json. */
+export function routeTypology(capacity: number | undefined): RouteTypology {
+  const cap = capacity ?? 160;
+  return cap >= 250
+    ? { bus_type: 'biarticulado', capacity: cap, length_m: 27 }
+    : { bus_type: 'articulado', capacity: cap, length_m: 18 };
+}
 
 function interpolateBusTrajectories(
   trajectories: BusTrajectory[],
   simTimeSec: number,
   selectedRoute: string | null,
   routeColorMap: Map<string, string>,
+  routeTypologyMap: Map<string, RouteTypology>,
   stations: Station[],
   isOptimizedScenario = false
 ): InterpolatedBus[] {
@@ -40,7 +46,7 @@ function interpolateBusTrajectories(
     const kf = b.keyframes;
     if (!kf || kf.length === 0) continue;
 
-    const typo = ROUTE_TYPOLOGIES[b.route] || { bus_type: 'articulado' as BusTypology, capacity: 160, length_m: 18 };
+    const typo = routeTypologyMap.get(b.route) ?? routeTypology(undefined);
 
     let lat = kf[0].lat;
     let lon = kf[0].lon;
@@ -207,7 +213,7 @@ export function useSimulation() {
       .then(([sts, rts, trjs, qtl, smm, trjsOpt, qtlOpt, smmOpt, log]) => {
         // Enrich routes with typology
         const enrichedRoutes = rts.map((r: RouteConfig) => {
-          const typo = ROUTE_TYPOLOGIES[r.id] || { bus_type: 'articulado', capacity: 160, length_m: 18 };
+          const typo = routeTypology(r.capacity);
           return {
             ...r,
             bus_type: typo.bus_type,
@@ -284,6 +290,14 @@ export function useSimulation() {
     return map;
   }, [routes]);
 
+  const routeTypologyMap = useMemo(() => {
+    const map = new Map<string, RouteTypology>();
+    for (const r of routes) {
+      map.set(r.id, routeTypology(r.capacity));
+    }
+    return map;
+  }, [routes]);
+
   // Compute interpolated active buses for Baseline scenario
   const activeBuses = useMemo<InterpolatedBus[]>(() => {
     return interpolateBusTrajectories(
@@ -291,32 +305,25 @@ export function useSimulation() {
       simTimeSec,
       selectedRoute,
       routeColorMap,
+      routeTypologyMap,
       stations,
       false
     );
-  }, [trajectories, simTimeSec, selectedRoute, routeColorMap, stations]);
+  }, [trajectories, simTimeSec, selectedRoute, routeColorMap, routeTypologyMap, stations]);
 
-  // Compute interpolated active buses for AI Optimized scenario
+  // Optimized scenario: only real exported telemetry is shown (no synthetic fallback).
   const activeBusesOptimized = useMemo<InterpolatedBus[]>(() => {
-    if (trajectoriesOpt.length > 0) {
-      return interpolateBusTrajectories(
-        trajectoriesOpt,
-        simTimeSec,
-        selectedRoute,
-        routeColorMap,
-        stations,
-        true
-      );
-    }
-    // Fallback if opt trajectories file not loaded yet
-    return activeBuses.map((bus) => ({
-      ...bus,
-      occupancy_pct: Math.round(bus.occupancy_pct * 0.85),
-      passengers: Math.round(bus.passengers * 0.85),
-      is_bunching: false,
-      bunching_with: undefined,
-    }));
-  }, [trajectoriesOpt, activeBuses, simTimeSec, selectedRoute, routeColorMap, stations]);
+    if (!trajectoriesOpt.length) return [];
+    return interpolateBusTrajectories(
+      trajectoriesOpt,
+      simTimeSec,
+      selectedRoute,
+      routeColorMap,
+      routeTypologyMap,
+      stations,
+      true
+    );
+  }, [trajectoriesOpt, simTimeSec, selectedRoute, routeColorMap, routeTypologyMap, stations]);
 
   // Compute station queues for Baseline
   const currentQueues = useMemo<Record<string, number>>(() => {
