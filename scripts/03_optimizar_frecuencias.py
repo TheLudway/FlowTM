@@ -13,7 +13,7 @@ High-fidelity Multi-objective Optimization and Telemetry Export (Before vs. Afte
 FlowTM - Digital Twin Rational Agent Engine
 Implements Avance II Academic Specification:
 - Multi-criteria Utility Function U(S)
-- Strict Physical Fleet Constraint (B_max <= 106 buses)
+- Strict Physical Fleet Constraint (B_max = current GTFS fleet of the routes)
 - Simulated Annealing Metaheuristic
 - Standard GTFS frequencies.txt Exporter
 """
@@ -21,7 +21,6 @@ Implements Avance II Academic Specification:
 import json
 from pathlib import Path
 
-from flowtm.domain.state import ScheduleState
 from flowtm.infrastructure.gtfs_exporter import export_gtfs_frequencies
 from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
 from flowtm.optimization.utility import UtilityCalculator
@@ -38,28 +37,20 @@ print("OPTIMIZACIÓN: AGENTE HEURÍSTICO MULTIOBJETIVO - FlowTM")
 print("Avance II: Formulación del Problema como Agente Inteligente")
 print("=" * 80)
 
-# 1. Official Baseline Scenario (TransMilenio Peak GTFS)
-# Routes: B13, B18, B23, B27, B74, B75
-base_headways: dict[str, float] = {
-    "B13": 2.0,
-    "B18": 2.0,
-    "B23": 3.0,
-    "B27": 4.0,
-    "B74": 4.0,
-    "B75": 2.0,
-}
-base_state = ScheduleState(headways=base_headways)
+# 1. Current operation (mean AM-peak GTFS headways of the optimizable routes)
+base_simulator = CorridorSimulator(scenario_dir)
+base_state = base_simulator.scenario.base_schedule()
+base_headways = base_state.headways
 base_fleet = base_state.total_fleet_used()
 
-print(f"\n[INFO] Horario inicial (base): {base_headways}")
+print(f"\n[INFO] Horario inicial (GTFS): {base_headways}")
 print(f"[INFO] Flota requerida (base): {base_fleet}/{base_state.max_fleet} buses")
 
-base_simulator = CorridorSimulator(scenario_dir)
 base_results = base_simulator.simulate(base_headways)
 base_telemetry_dir = scenario_dir / "telemetria_base"
 base_simulator.collector.export_telemetry(base_telemetry_dir)
 
-utility_calc = UtilityCalculator()
+utility_calc = UtilityCalculator(max_fleet=base_state.max_fleet)
 base_breakdown = utility_calc.evaluate_breakdown(base_results, fleet_used=base_fleet)
 base_utility = base_breakdown["utility"]
 
@@ -112,6 +103,9 @@ opt_log_data = {
         "transported_pax": opt_results.total_transported_passengers,
     },
     "delta_utility": round(best_utility - base_utility, 4),
+    "max_fleet": base_state.max_fleet,
+    "optimizable_routes": base_simulator.scenario.optimizable_routes,
+    "background_routes": base_simulator.scenario.background_routes,
     "history": optimizer.history,
 }
 with open(opt_log_path, "w", encoding="utf-8") as f:

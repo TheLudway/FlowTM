@@ -19,13 +19,12 @@ Exact weights from academic specification:
     w1 = 0.40  (Weighted mean passenger waiting time in minutes)
     w2 = 0.30  (Fraction of buses with occupancy >= 95%, exponential penalty 1.5)
     w3 = 0.15  (Stranded passengers at platform at the end of the peak hour)
-    w4 = 0.15  (Fleet consumed out of B_max = 106 buses)
+    w4 = 0.15  (Fleet consumed out of B_max, the fleet of the current GTFS operation)
 """
 
 from typing import Any
 
 from flowtm.domain.models import SimulationResult
-from flowtm.domain.state import MAX_FLEET_CAPACITY
 
 
 class UtilityCalculator:
@@ -36,11 +35,11 @@ class UtilityCalculator:
 
     def __init__(
         self,
+        max_fleet: int,
         w_wait: float = 0.40,
         w_overcrowding: float = 0.30,
         w_stranded: float = 0.15,
         w_fleet: float = 0.15,
-        max_fleet: int = MAX_FLEET_CAPACITY,
     ) -> None:
         self.w1 = w_wait
         self.w2 = w_overcrowding

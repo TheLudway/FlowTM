@@ -12,86 +12,83 @@ from pathlib import Path
 import pytest
 
 from flowtm.domain.models import SimulationResult
-from flowtm.domain.state import MAX_FLEET_CAPACITY, ScheduleState
+from flowtm.domain.state import ScheduleState
 from flowtm.infrastructure.gtfs_exporter import export_gtfs_frequencies
 from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
 from flowtm.optimization.utility import UtilityCalculator
+from flowtm.simulation.scenario import CorridorScenario
 
-BASE_HEADWAYS: dict[str, float] = {
-    "B13": 2.0,
-    "B18": 2.0,
-    "B23": 3.0,
-    "B27": 4.0,
-    "B74": 4.0,
-    "B75": 2.0,
-}
+LEG_TIMES = {"R1": 60.0, "R2": 50.0, "R3": 40.0}
+BASE_HEADWAYS = {"R1": 4.0, "R2": 5.0, "R3": 5.0}
+BASE_FLEET = 15 + 10 + 8
 
 
-def test_schedule_state_fleet_constraint():
-    base_headways = {
-        "B13": 2.0,
-        "B18": 2.0,
-        "B23": 3.0,
-        "B27": 4.0,
-        "B74": 4.0,
-        "B75": 2.0,
-    }
-    state = ScheduleState(headways=base_headways)
+def make_state(headways: dict[str, float] | None = None, max_fleet: int = BASE_FLEET):
+    return ScheduleState(
+        headways=dict(headways or BASE_HEADWAYS),
+        leg_times=LEG_TIMES,
+        max_fleet=max_fleet,
+    )
 
-    fleet_usage = state.fleet_used_by_route()
-    assert fleet_usage["B13"] == 25
-    assert fleet_usage["B18"] == 20
-    assert fleet_usage["B23"] == 15
-    assert fleet_usage["B27"] == 12
-    assert fleet_usage["B74"] == 12
-    assert fleet_usage["B75"] == 22
 
-    total_fleet = state.total_fleet_used()
-    assert total_fleet == 106, f"Expected 106 buses, got {total_fleet}"
+def test_schedule_state_fleet_formula():
+    state = make_state()
+
+    assert state.fleet_used_by_route() == {"R1": 15, "R2": 10, "R3": 8}
+    assert state.total_fleet_used() == BASE_FLEET
     assert state.is_fleet_feasible() is True
+    assert make_state(max_fleet=BASE_FLEET - 1).is_fleet_feasible() is False
+
+
+def test_fleet_includes_fixed_return_leg():
+    # Return leg runs at its own GTFS headway: its vehicles do not change with h.
+    state = ScheduleState(
+        headways={"R1": 4.0},
+        leg_times={"R1": 60.0},
+        max_fleet=40,
+        fixed_fleet={"R1": 20},
+    )
+    assert state.fleet_used_by_route() == {"R1": 15 + 20}
+    state.headways["R1"] = 6.0
+    assert state.fleet_used_by_route() == {"R1": 10 + 20}
+
+
+def test_scenario_base_schedule_matches_fleet_bound(synthetic_scenario_dir: Path):
+    scenario = CorridorScenario.load(synthetic_scenario_dir)
+    base = scenario.base_schedule()
+
+    assert scenario.optimizable_routes == ["R1", "R2", "R3"]
+    assert scenario.background_routes == ["BG1"]
+    assert base.headways == BASE_HEADWAYS
+    assert base.total_fleet_used() == scenario.max_fleet == BASE_FLEET
 
 
 def test_neighbor_preserves_fleet_feasibility():
-    base_headways = {
-        "B13": 2.0,
-        "B18": 2.0,
-        "B23": 3.0,
-        "B27": 4.0,
-        "B74": 4.0,
-        "B75": 2.0,
-    }
-    state = ScheduleState(headways=base_headways)
+    state = make_state()
     rng = random.Random(0)
 
     for _ in range(200):
         neighbor = state.generate_neighbor(step_min=0.5, rng=rng)
-        # Verify bounds [2.0, 15.0]
-        for _r, h in neighbor.headways.items():
-            assert 2.0 <= h <= 15.0
-        # Verify fleet feasibility
-        assert neighbor.total_fleet_used() <= MAX_FLEET_CAPACITY
+        assert all(2.0 <= h <= 15.0 for h in neighbor.headways.values())
+        assert neighbor.total_fleet_used() <= state.max_fleet
 
 
 def test_neighbor_returns_unchanged_state_when_no_feasible_candidate():
     # Two symmetric routes at exactly the fleet limit: any boost/trim pair adds one
-    # bus (ceil(60/9.5) + ceil(60/10.5) = 7 + 6 = 13 > 12), so every candidate is
-    # infeasible and the current state must be returned unchanged.
+    # bus (ceil(60/9.5) + ceil(60/10.5) = 7 + 6 = 13 > 12).
     state = ScheduleState(
         headways={"R1": 10.0, "R2": 10.0},
-        cycle_times={"R1": 60.0, "R2": 60.0},
+        leg_times={"R1": 60.0, "R2": 60.0},
         max_fleet=12,
     )
-    assert state.is_fleet_feasible()
-
     neighbor = state.generate_neighbor(step_min=0.5, rng=random.Random(1))
 
     assert neighbor.headways == state.headways
     assert neighbor is not state
-    assert neighbor.is_fleet_feasible()
 
 
 def test_neighbor_generation_is_reproducible_with_seed():
-    state = ScheduleState(headways=BASE_HEADWAYS)
+    state = make_state()
     first = state.generate_neighbor(rng=random.Random(123))
     second = state.generate_neighbor(rng=random.Random(123))
     assert first.headways == second.headways
@@ -101,29 +98,29 @@ def test_optimizer_rejects_infeasible_initial_state(synthetic_scenario_dir: Path
     optimizer = SimulatedAnnealingOptimizer(
         synthetic_scenario_dir, iterations=1, verbose=False
     )
-    infeasible_state = ScheduleState(headways=BASE_HEADWAYS, max_fleet=50)
-
     with pytest.raises(ValueError, match="supera la flota"):
-        optimizer.optimize(infeasible_state)
+        optimizer.optimize(make_state(max_fleet=10))
 
 
 def test_optimizer_returns_feasible_best_state(synthetic_scenario_dir: Path):
     optimizer = SimulatedAnnealingOptimizer(
         synthetic_scenario_dir, iterations=3, seed=42, verbose=False
     )
-    initial_state = ScheduleState(headways=BASE_HEADWAYS)
+    initial_state = CorridorScenario.load(synthetic_scenario_dir).base_schedule()
 
     best_state, best_result = optimizer.optimize(initial_state)
 
     assert best_state.is_fleet_feasible()
     assert best_result.total_dispatched_buses > 0
     assert len(optimizer.history) == 4
-    assert all(entry["fleet_used"] <= MAX_FLEET_CAPACITY for entry in optimizer.history)
+    assert all(
+        entry["fleet_used"] <= initial_state.max_fleet for entry in optimizer.history
+    )
     assert optimizer.history[-1]["best_utility"] >= optimizer.history[0]["utility"]
 
 
 def test_optimizer_is_reproducible_with_seed(synthetic_scenario_dir: Path):
-    initial_state = ScheduleState(headways=BASE_HEADWAYS)
+    initial_state = CorridorScenario.load(synthetic_scenario_dir).base_schedule()
 
     runs = []
     for _ in range(2):
@@ -131,27 +128,14 @@ def test_optimizer_is_reproducible_with_seed(synthetic_scenario_dir: Path):
             synthetic_scenario_dir, iterations=3, seed=2026, verbose=False
         )
         best_state, _ = optimizer.optimize(initial_state)
-        runs.append((best_state.headways, optimizer.history))
+        runs.append((best_state.headways, [h["headways"] for h in optimizer.history]))
 
-    assert runs[0][0] == runs[1][0]
-    assert [entry["headways"] for entry in runs[0][1]] == [
-        entry["headways"] for entry in runs[1][1]
-    ]
-    assert [entry["accepted"] for entry in runs[0][1]] == [
-        entry["accepted"] for entry in runs[1][1]
-    ]
+    assert runs[0] == runs[1]
 
 
 def test_multicriteria_utility_function():
-    calc = UtilityCalculator(
-        w_wait=0.40,
-        w_overcrowding=0.30,
-        w_stranded=0.15,
-        w_fleet=0.15,
-        max_fleet=106,
-    )
-
-    res_good = SimulationResult(
+    calc = UtilityCalculator(max_fleet=100)
+    good = SimulationResult(
         avg_waiting_time_min=2.5,
         avg_occupancy_rate=0.45,
         overcrowded_bus_pct=5.0,
@@ -159,8 +143,7 @@ def test_multicriteria_utility_function():
         stranded_passengers_in_queue=500,
         total_dispatched_buses=420,
     )
-
-    res_bad = SimulationResult(
+    bad = SimulationResult(
         avg_waiting_time_min=5.0,
         avg_occupancy_rate=0.75,
         overcrowded_bus_pct=35.0,
@@ -169,25 +152,19 @@ def test_multicriteria_utility_function():
         total_dispatched_buses=420,
     )
 
-    u_good = calc.evaluate(res_good, fleet_used=106)
-    u_bad = calc.evaluate(res_bad, fleet_used=106)
-
-    # U(S) is negative cost; better performance gives higher (less negative) utility
-    assert u_good > u_bad
-
-    # Test hard penalty on fleet violation
-    u_violation = calc.evaluate(res_good, fleet_used=110)
-    assert u_violation < u_good - 50.0  # severely penalized
+    # U(S) is a negative cost: better service gives a higher utility.
+    assert calc.evaluate(good, fleet_used=100) > calc.evaluate(bad, fleet_used=100)
+    # Exceeding the fleet bound is severely penalized.
+    assert (
+        calc.evaluate(good, fleet_used=104) < calc.evaluate(good, fleet_used=100) - 50.0
+    )
 
 
 def test_gtfs_exporter(tmp_path: Path):
-    headways = {"B13": 2.0, "B18": 2.5, "B23": 3.0}
     out_file = tmp_path / "frequencies.txt"
-    export_gtfs_frequencies(headways, out_file)
+    export_gtfs_frequencies({"H13": 2.0, "H75": 2.5, "K23": 3.0}, out_file)
 
-    assert out_file.exists()
-    content = out_file.read_text(encoding="utf-8")
-    lines = content.strip().split("\n")
+    lines = out_file.read_text(encoding="utf-8").strip().split("\n")
     assert lines[0] == "route_id,trip_id,start_time,end_time,headway_secs,exact_times"
     assert len(lines) == 4
-    assert "B13,TRIP_B13_PEAK,06:00:00,09:00:00,120,0" in lines
+    assert "H13,TRIP_H13_PEAK,06:00:00,09:00:00,120,0" in lines

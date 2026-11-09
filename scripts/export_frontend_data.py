@@ -24,6 +24,7 @@ from pathlib import Path
 import polars as pl
 
 from flowtm.simulation.collector import SUMMARY_METRICS_FILENAME
+from flowtm.simulation.scenario import SOUTH_SINK_CODE, CorridorScenario
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCENARIO_DIR = ROOT_DIR / "data/scenarios/piloto"
@@ -64,17 +65,20 @@ for row in df_stations.iter_rows(named=True):
             "lon": float(row["lon"]),
             "distance_next_m": float(row["distancia_siguiente_m"]),
             "travel_time_sec": float(row["tiempo_viaje_seg"]),
-            "ub_est": off_props.get("ub_est", "Troncal Caracas - Autonorte"),
-            "num_vag": off_props.get("num_vag", 3),
-            "cap_biart": off_props.get("cap_biart", 120),
-            "cap_art": off_props.get("cap_art", 200),
-            "area_est": off_props.get("area_est", 500.0),
+            "bays": int(row["bahias"]),
+            "ub_est": off_props.get("ub_est"),
+            "num_vag": off_props.get("num_vag"),
+            "cap_biart": off_props.get("cap_biart"),
+            "cap_art": off_props.get("cap_art"),
+            "area_est": off_props.get("area_est"),
         }
     )
 
 with open(OUTPUT_DIR / "stations.json", "w", encoding="utf-8") as f:
     json.dump(stations, f, indent=2, ensure_ascii=False)
 print(f"[INFO] {len(stations)} estaciones enriquecidas exportadas a stations.json")
+station_names = {s["code"]: s["name"].title() for s in stations}
+station_names[SOUTH_SINK_CODE] = "Sur (fuera del corredor)"
 
 # 2. Corridor GeoJSON
 features = []
@@ -84,7 +88,7 @@ features.append(
         "type": "Feature",
         "properties": {
             "id": "corridor-trunk-lane",
-            "name": "Corredor Troncal Autonorte - Caracas",
+            "name": "Corredor Troncal Portal Norte - Marly (sentido sur)",
             "stations_count": len(stations),
         },
         "geometry": {
@@ -124,133 +128,26 @@ with open(OUTPUT_DIR / "corridor.geojson", "w", encoding="utf-8") as f:
     json.dump(corridor_geojson, f, indent=2, ensure_ascii=False)
 print("[INFO] corridor.geojson exportado")
 
-# 3. Routes Configuration
+# 3. Routes configuration (every GTFS service crossing the corridor)
+scenario = CorridorScenario.load(SCENARIO_DIR)
 ROUTES_CONFIG = [
     {
-        "id": "B13",
-        "name": "Ruta B13",
-        "service": "Troncal Tunal / Autonorte - Caracas",
-        "color": "#E53935",
-        "headway_min": 2.0,
-        "stops": [
-            "02000",
-            "02101",
-            "02102",
-            "02103",
-            "02104",
-            "02200",
-            "02205",
-            "02300",
-            "02303",
-            "09127",
-            "09120",
-            "09117",
-        ],
-        "stops_count": 12,
-    },
-    {
-        "id": "B18",
-        "name": "Ruta B18",
-        "service": "Expreso 20 de Julio -> Portal Norte",
-        "color": "#1976D2",
-        "headway_min": 2.0,
-        "stops": [
-            "02000",
-            "02101",
-            "02200",
-            "02204",
-            "02300",
-            "02302",
-            "02304",
-            "09122",
-            "09127",
-        ],
-        "stops_count": 9,
-    },
-    {
-        "id": "B23",
-        "name": "Ruta B23",
-        "service": "Expreso Eldorado -> Portal Norte / Alcalá",
-        "color": "#FFA000",
-        "headway_min": 3.0,
-        "stops": [
-            "02000",
-            "02103",
-            "02200",
-            "02201",
-            "02204",
-            "02300",
-            "02303",
-            "09122",
-            "09117",
-        ],
-        "stops_count": 9,
-    },
-    {
-        "id": "B27",
-        "name": "Ruta B27",
-        "service": "Expreso Troncal Tunal -> Portal Norte",
-        "color": "#8E24AA",
-        "headway_min": 4.0,
-        "stops": [
-            "02000",
-            "02101",
-            "02104",
-            "02200",
-            "02300",
-            "02302",
-            "02304",
-            "09122",
-            "09117",
-        ],
-        "stops_count": 9,
-    },
-    {
-        "id": "B74",
-        "name": "Ruta B74",
-        "service": "Expreso Universidades -> Portal Norte",
-        "color": "#00897B",
-        "headway_min": 4.0,
-        "stops": [
-            "02000",
-            "02101",
-            "02103",
-            "02104",
-            "02201",
-            "02300",
-            "02302",
-            "02304",
-            "09122",
-            "09117",
-        ],
-        "stops_count": 10,
-    },
-    {
-        "id": "B75",
-        "name": "Ruta B75",
-        "service": "Expreso Alta Frecuencia Usme -> Portal Norte",
-        "color": "#D84315",
-        "headway_min": 2.0,
-        "stops": [
-            "02000",
-            "02101",
-            "02104",
-            "02200",
-            "02201",
-            "02300",
-            "02304",
-            "09122",
-            "09127",
-            "09120",
-            "09117",
-        ],
-        "stops_count": 11,
-    },
+        "id": service.route,
+        "name": f"Ruta {service.route}",
+        "service": service.name,
+        "color": service.color,
+        "role": service.role,
+        "headway_min": service.headway_gtfs_min,
+        "cycle_time_min": service.cycle_time_min,
+        "stops": list(service.stops),
+        "stops_count": len(service.stops),
+        "capacity": service.capacity,
+    }
+    for service in scenario.services.values()
 ]
-
 with open(OUTPUT_DIR / "routes.json", "w", encoding="utf-8") as f:
     json.dump(ROUTES_CONFIG, f, indent=2, ensure_ascii=False)
-print("[INFO] routes.json exportado")
+print(f"[INFO] routes.json exportado ({len(ROUTES_CONFIG)} servicios)")
 
 
 def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
@@ -339,7 +236,19 @@ def process_telemetry_directory(telemetry_dir: Path, suffix: str = ""):
         "overcrowded_buses_pct": run_metrics["overcrowded_buses_pct"],
         "stranded_passengers_in_queue": run_metrics["stranded_passengers_in_queue"],
         "max_queue_station": max_queue,
+        "avg_dispatch_delay_min": run_metrics.get("avg_dispatch_delay_min", 0.0),
+        "od_top": [
+            {
+                **pair,
+                "origin_name": station_names.get(pair["origin"], pair["origin"]),
+                "destination_name": station_names.get(
+                    pair["destination"], pair["destination"]
+                ),
+            }
+            for pair in run_metrics.get("od_top", [])
+        ],
         "active_routes": len(ROUTES_CONFIG),
+        "optimizable_routes": len(scenario.optimizable_routes),
         "total_stations": len(stations),
         "sim_duration_sec": 10800,
         "start_hour": 6,
