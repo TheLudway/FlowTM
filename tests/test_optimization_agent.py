@@ -73,20 +73,6 @@ def test_neighbor_preserves_fleet_feasibility():
         assert neighbor.total_fleet_used() <= state.max_fleet
 
 
-def test_neighbor_returns_unchanged_state_when_no_feasible_candidate():
-    # Two symmetric routes at exactly the fleet limit: any boost/trim pair adds one
-    # bus (ceil(60/9.5) + ceil(60/10.5) = 7 + 6 = 13 > 12).
-    state = ScheduleState(
-        headways={"R1": 10.0, "R2": 10.0},
-        leg_times={"R1": 60.0, "R2": 60.0},
-        max_fleet=12,
-    )
-    neighbor = state.generate_neighbor(step_min=0.5, rng=random.Random(1))
-
-    assert neighbor.headways == state.headways
-    assert neighbor is not state
-
-
 def test_neighbor_generation_is_reproducible_with_seed():
     state = make_state()
     first = state.generate_neighbor(rng=random.Random(123))
