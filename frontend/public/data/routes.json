@@ -1,122 +1,355 @@
 [
   {
-    "id": "B13",
-    "name": "Ruta B13",
-    "service": "Troncal Tunal / Autonorte - Caracas",
-    "color": "#E53935",
-    "headway_min": 2.0,
+    "id": "K16",
+    "name": "Ruta K16",
+    "service": "PElDorado",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B16",
+    "headway_min": 2.65,
+    "cycle_time_min": 129.0,
+    "stops": [
+      "02101",
+      "02103",
+      "02200",
+      "02204"
+    ],
+    "stops_count": 4,
+    "capacity": 160
+  },
+  {
+    "id": "H13",
+    "name": "Ruta H13",
+    "service": "P. TUNAL",
+    "color": "#ff0000",
+    "role": "optimizable",
+    "counterpart": "B13",
+    "headway_min": 3.27,
+    "cycle_time_min": 195.2,
     "stops": [
       "02000",
-      "02101",
       "02102",
       "02103",
       "02104",
-      "02200",
+      "02105",
+      "02202",
       "02205",
-      "02300",
       "02303",
-      "09127",
-      "09120",
-      "09117"
+      "09123",
+      "09121"
     ],
-    "stops_count": 12
+    "stops_count": 10,
+    "capacity": 160
   },
   {
-    "id": "B18",
-    "name": "Ruta B18",
-    "service": "Expreso 20 de Julio -> Portal Norte",
-    "color": "#1976D2",
-    "headway_min": 2.0,
+    "id": "A52",
+    "name": "Ruta A52",
+    "service": "Flores Temporal",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": null,
+    "headway_min": 3.4,
+    "cycle_time_min": 133.0,
+    "stops": [
+      "09123",
+      "09121"
+    ],
+    "stops_count": 2,
+    "capacity": 160
+  },
+  {
+    "id": "G12",
+    "name": "Ruta G12",
+    "service": "P. Sur",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B12",
+    "headway_min": 3.53,
+    "cycle_time_min": 135.5,
     "stops": [
       "02000",
       "02101",
-      "02200",
-      "02204",
-      "02300",
-      "02302",
-      "02304",
-      "09122",
-      "09127"
+      "02105",
+      "02201",
+      "02202",
+      "02300"
     ],
-    "stops_count": 9
+    "stops_count": 6,
+    "capacity": 160
   },
   {
-    "id": "B23",
-    "name": "Ruta B23",
-    "service": "Expreso Eldorado -> Portal Norte / Alcalá",
-    "color": "#FFA000",
-    "headway_min": 3.0,
+    "id": "H15",
+    "name": "Ruta H15",
+    "service": "Portal Tunal",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "C15",
+    "headway_min": 3.53,
+    "cycle_time_min": 222.5,
+    "stops": [
+      "09123",
+      "09119",
+      "09118"
+    ],
+    "stops_count": 3,
+    "capacity": 160
+  },
+  {
+    "id": "H75",
+    "name": "Ruta H75",
+    "service": "P.USME",
+    "color": "#ff0000",
+    "role": "optimizable",
+    "counterpart": "B75",
+    "headway_min": 3.75,
+    "cycle_time_min": 213.1,
     "stops": [
       "02000",
+      "02101",
+      "02104",
+      "02105",
+      "02201",
+      "02300",
+      "02304",
+      "09123",
+      "09119",
+      "09118"
+    ],
+    "stops_count": 10,
+    "capacity": 160
+  },
+  {
+    "id": "J24",
+    "name": "Ruta J24",
+    "service": "Universidades",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "D24",
+    "headway_min": 3.75,
+    "cycle_time_min": 125.4,
+    "stops": [
+      "09123",
+      "09119",
+      "09118"
+    ],
+    "stops_count": 3,
+    "capacity": 160
+  },
+  {
+    "id": "J70",
+    "name": "Ruta J70",
+    "service": "Aguas",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": null,
+    "headway_min": 3.83,
+    "cycle_time_min": 113.5,
+    "stops": [
+      "02000",
+      "02101",
+      "02103",
+      "02104",
+      "02105",
+      "02200",
+      "02201",
+      "02202"
+    ],
+    "stops_count": 8,
+    "capacity": 160
+  },
+  {
+    "id": "K23",
+    "name": "Ruta K23",
+    "service": "Portal Eldorado",
+    "color": "#ff0000",
+    "role": "optimizable",
+    "counterpart": "B23",
+    "headway_min": 4.5,
+    "cycle_time_min": 141.4,
+    "stops": [
+      "02200",
+      "02201",
+      "02202",
+      "02303",
+      "09119",
+      "09118"
+    ],
+    "stops_count": 6,
+    "capacity": 160
+  },
+  {
+    "id": "J74",
+    "name": "Ruta J74",
+    "service": "Universidades",
+    "color": "#ff0000",
+    "role": "optimizable",
+    "counterpart": "B74",
+    "headway_min": 5.0,
+    "cycle_time_min": 110.4,
+    "stops": [
+      "02000",
+      "02101",
+      "02103",
+      "02104",
+      "02105",
+      "02201",
+      "02302",
+      "02304",
+      "09119"
+    ],
+    "stops_count": 9,
+    "capacity": 160
+  },
+  {
+    "id": "G11",
+    "name": "Ruta G11",
+    "service": "Portal Sur",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B11",
+    "headway_min": 5.14,
+    "cycle_time_min": 161.8,
+    "stops": [
+      "02101",
+      "02104",
+      "02205",
+      "02302",
+      "02303",
+      "02304"
+    ],
+    "stops_count": 6,
+    "capacity": 160
+  },
+  {
+    "id": "D10",
+    "name": "Ruta D10",
+    "service": "Portal 80",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B10",
+    "headway_min": 5.45,
+    "cycle_time_min": 104.8,
+    "stops": [
+      "02000",
+      "02101",
+      "02103",
+      "02104",
+      "02200",
+      "02300",
+      "02303"
+    ],
+    "stops_count": 7,
+    "capacity": 160
+  },
+  {
+    "id": "H27",
+    "name": "Ruta H27",
+    "service": "Portal Tunal",
+    "color": "#ff0000",
+    "role": "optimizable",
+    "counterpart": "B27",
+    "headway_min": 5.45,
+    "cycle_time_min": 188.0,
+    "stops": [
+      "02000",
+      "02101",
+      "02300",
+      "02302",
+      "02303",
+      "02304"
+    ],
+    "stops_count": 6,
+    "capacity": 160
+  },
+  {
+    "id": "H72",
+    "name": "Ruta H72",
+    "service": "P. Usme",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B72",
+    "headway_min": 5.45,
+    "cycle_time_min": 154.0,
+    "stops": [
+      "02101",
       "02103",
       "02200",
+      "02204"
+    ],
+    "stops_count": 4,
+    "capacity": 160
+  },
+  {
+    "id": "L18",
+    "name": "Ruta L18",
+    "service": "PORTAL 20 DE JULIO",
+    "color": "#ff0000",
+    "role": "optimizable",
+    "counterpart": "B18",
+    "headway_min": 6.0,
+    "cycle_time_min": 188.8,
+    "stops": [
+      "02200",
+      "02202",
+      "02204",
+      "02302",
+      "09123"
+    ],
+    "stops_count": 5,
+    "capacity": 160
+  },
+  {
+    "id": "F28",
+    "name": "Ruta F28",
+    "service": "Portal Américas",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B28",
+    "headway_min": 6.67,
+    "cycle_time_min": 159.5,
+    "stops": [
+      "02000",
+      "02102",
+      "02104",
       "02201",
       "02204",
-      "02300",
-      "02303",
-      "09122",
-      "09117"
+      "02205"
     ],
-    "stops_count": 9
+    "stops_count": 6,
+    "capacity": 160
   },
   {
-    "id": "B27",
-    "name": "Ruta B27",
-    "service": "Expreso Troncal Tunal -> Portal Norte",
-    "color": "#8E24AA",
-    "headway_min": 4.0,
+    "id": "F60",
+    "name": "Ruta F60",
+    "service": "Portal Américas",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "A60",
+    "headway_min": 6.67,
+    "cycle_time_min": 153.8,
+    "stops": [
+      "09123",
+      "09118"
+    ],
+    "stops_count": 2,
+    "capacity": 160
+  },
+  {
+    "id": "G46",
+    "name": "Ruta G46",
+    "service": "San Mateo",
+    "color": "#ff0000",
+    "role": "fondo",
+    "counterpart": "B46",
+    "headway_min": 6.92,
+    "cycle_time_min": 151.8,
     "stops": [
       "02000",
       "02101",
-      "02104",
       "02200",
-      "02300",
-      "02302",
-      "02304",
-      "09122",
-      "09117"
+      "02300"
     ],
-    "stops_count": 9
-  },
-  {
-    "id": "B74",
-    "name": "Ruta B74",
-    "service": "Expreso Universidades -> Portal Norte",
-    "color": "#00897B",
-    "headway_min": 4.0,
-    "stops": [
-      "02000",
-      "02101",
-      "02103",
-      "02104",
-      "02201",
-      "02300",
-      "02302",
-      "02304",
-      "09122",
-      "09117"
-    ],
-    "stops_count": 10
-  },
-  {
-    "id": "B75",
-    "name": "Ruta B75",
-    "service": "Expreso Alta Frecuencia Usme -> Portal Norte",
-    "color": "#D84315",
-    "headway_min": 2.0,
-    "stops": [
-      "02000",
-      "02101",
-      "02104",
-      "02200",
-      "02201",
-      "02300",
-      "02304",
-      "09122",
-      "09127",
-      "09120",
-      "09117"
-    ],
-    "stops_count": 11
+    "stops_count": 4,
+    "capacity": 160
   }
 ]
