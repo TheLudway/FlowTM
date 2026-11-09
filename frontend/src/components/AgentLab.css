@@ -392,3 +392,10 @@
   background: var(--bg-subtle);
   display: inline-block;
 }
+
+.lab-footnote {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}

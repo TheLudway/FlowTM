@@ -4033,3 +4033,46 @@
   color: var(--text-tertiary);
   text-align: center;
 }
+
+/* Algorithm comparison (controlled experiment) */
+.algo-compare-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.algo-compare-row {
+  display: grid;
+  grid-template-columns: 160px minmax(120px, 1fr) 230px 140px 230px;
+  gap: 12px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+@media (max-width: 1100px) {
+  .algo-compare-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.algo-name {
+  font-weight: 700;
+}
+
+.algo-bar-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+
+.algo-bar-fill {
+  height: 100%;
+  background: var(--accent-green);
+  border-radius: var(--radius-full);
+}
+
+.algo-sig,
+.algo-extra {
+  color: var(--text-secondary);
+}

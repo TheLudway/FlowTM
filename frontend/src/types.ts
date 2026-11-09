@@ -172,6 +172,8 @@ export interface AIOptimizationLog {
   };
   delta_utility: number;
   max_fleet?: number;
+  holdout?: HoldoutReport;
+  config?: Record<string, unknown>;
   optimizable_routes?: string[];
   background_routes?: string[];
   history: AIOptimizationIteration[];
@@ -198,7 +200,10 @@ export interface PairedStat {
   ic95: [number, number];
   semillas_mejor: number;
   semillas: number;
+  /** 95% CI excludes zero (either direction). */
   significativo: boolean;
+  /** Difference goes in the desirable direction. */
+  mejora: boolean;
 }
 
 export interface HoldoutReport {
@@ -209,4 +214,21 @@ export interface HoldoutReport {
   varados: PairedStat;
   transportados: PairedStat;
   flota: { base: number; candidato: number };
+}
+
+export interface AlgorithmSummary {
+  delta_u_validacion_media: number;
+  delta_u_validacion_min: number;
+  delta_u_validacion_max: number;
+  corridas_significativas: number;
+  espera_pct_media: number;
+  sobrecupo_pct_media: number;
+}
+
+export interface AlgorithmComparison {
+  presupuesto_evaluaciones: number;
+  semillas_entrenamiento: number[];
+  semillas_validacion: number;
+  corridas_por_algoritmo: number;
+  resumen: Record<string, AlgorithmSummary>;
 }
