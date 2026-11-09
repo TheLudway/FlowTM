@@ -192,6 +192,7 @@ export interface ReplayPayload {
 
 /** Description of a Lab run shown on the split-screen badge. */
 export interface LabRunInfo {
+  runId?: number;
   algorithm: string;
   finishedAt: string;
   deltaU: number;

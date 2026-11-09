@@ -174,6 +174,7 @@ export function useSimulation() {
   const [summaryOpt, setSummaryOpt] = useState<SummaryKPIs | null>(null);
   const [aiLog, setAiLog] = useState<AIOptimizationLog | null>(null);
   const [optimizedSource, setOptimizedSource] = useState<OptimizedSource>({ kind: 'agente' });
+  const [officialLog, setOfficialLog] = useState<AIOptimizationLog | null>(null);
   // Official agent optimum (scripts/03, validated on 30 seeds) to restore after Lab runs.
   const officialOptimumRef = useRef<{
     trajectories: BusTrajectory[];
@@ -237,6 +238,7 @@ export function useSimulation() {
         if (qtlOpt && qtlOpt.length > 0) setQueueTimelineOpt(qtlOpt);
         if (smmOpt) setSummaryOpt(smmOpt);
         if (log) setAiLog(log);
+        setOfficialLog(log ?? null);
         officialOptimumRef.current = {
           trajectories: trjsOpt ?? [],
           queues: qtlOpt ?? [],
@@ -412,6 +414,7 @@ export function useSimulation() {
     applyAgentRun,
     restoreOfficialOptimum,
     optimizedSource,
+    officialLog,
     simTimeSec,
     durationSec: DURATION_SEC,
     isPlaying,
