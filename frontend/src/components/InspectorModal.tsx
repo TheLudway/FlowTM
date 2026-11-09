@@ -14,11 +14,24 @@ import {
 } from '@phosphor-icons/react';
 import type { AIOptimizationLog, InterpolatedBus, RouteConfig, SelectedEntity } from '../types';
 
+/** Platform queue levels; same thresholds as the map halos and the legend. */
+function queueLevel(queue: number) {
+  if (queue > 150) {
+    return { label: 'Saturación crítica', badge: 'alert-red', critical: true, message: 'Más de 150 pasajeros esperando' };
+  }
+  if (queue > 80) {
+    return { label: 'Moderada', badge: 'alert-yellow', critical: true, message: 'Entre 80 y 150 pasajeros esperando' };
+  }
+  return { label: 'Fluido', badge: 'alert-green', critical: false, message: 'Menos de 80 pasajeros esperando' };
+}
+
 interface InspectorModalProps {
   selectedEntity: SelectedEntity | null;
   onClose: () => void;
   routes: RouteConfig[];
   optimizedBuses?: InterpolatedBus[];
+  /** Real queues of the optimized scenario at the current instant. */
+  optimizedQueues?: Record<string, number>;
   aiLog?: AIOptimizationLog | null;
   isCameraFollowing?: boolean;
   onToggleCameraFollow?: () => void;
@@ -30,6 +43,7 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
   onClose,
   routes,
   optimizedBuses = [],
+  optimizedQueues = {},
   aiLog = null,
   isCameraFollowing = false,
   onToggleCameraFollow,
@@ -392,52 +406,42 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
           isSplitView ? (
             /* COMPARATIVE STATION VIEW (SPLIT MODE) */
             <div className="comparative-inspector-grid">
-              <div className="comparative-scenario-card base-scenario">
-                <div className="scenario-col-header">
-                  <span className="badge-dot base-dot" />
-                  <span className="col-title">ESCENARIO BASE (GTFS VIGENTE)</span>
-                </div>
-                <div className="comp-metric-row">
-                  <span className="comp-label">Cola en Andén Q(t):</span>
-                  <span className="comp-val font-mono tabular-nums text-alert">
-                    {data.queue !== undefined ? data.queue : 0} pax
-                  </span>
-                </div>
-                <div className="comp-metric-row">
-                  <span className="comp-label">Nivel de Servicio:</span>
-                  <span className="comp-val font-mono">
-                    {data.queue > 150 ? 'Saturación Crítica' : data.queue > 80 ? 'Moderada' : 'Fluido'}
-                  </span>
-                </div>
-                <div className="comp-alert-badge alert-red">
-                  <Warning size={12} weight="fill" />
-                  <span>Riesgo de retraso en abordaje de usuarios</span>
-                </div>
-              </div>
-
-              <div className="comparative-scenario-card opt-scenario">
-                <div className="scenario-col-header">
-                  <span className="badge-dot opt-dot" />
-                  <span className="col-title">FLOWTM OPTIMIZADO (IA)</span>
-                  <Sparkle size={12} weight="fill" color="var(--accent-yellow)" />
-                </div>
-                <div className="comp-metric-row">
-                  <span className="comp-label">Cola en Andén Q(t):</span>
-                  <span className="comp-val font-mono tabular-nums text-success">
-                    {Math.round((data.queue || 0) * 0.62)} pax <span className="delta-badge">-38%</span>
-                  </span>
-                </div>
-                <div className="comp-metric-row">
-                  <span className="comp-label">Nivel de Servicio:</span>
-                  <span className="comp-val font-mono text-success">
-                    Fluido y Sincronizado
-                  </span>
-                </div>
-                <div className="comp-alert-badge alert-green">
-                  <CheckCircle size={12} weight="fill" />
-                  <span>Flota sincronizada absorbe colas oportunamente</span>
-                </div>
-              </div>
+              {[
+                { key: 'base', title: 'OPERACIÓN ACTUAL (GTFS)', queue: Number(data.queue ?? 0), dot: 'base-dot' },
+                { key: 'opt', title: 'HORARIO DEL AGENTE (IA)', queue: Number(optimizedQueues[data.code] ?? 0), dot: 'opt-dot' },
+              ].map((scenario) => {
+                const level = queueLevel(scenario.queue);
+                const baseQueue = Number(data.queue ?? 0);
+                const delta = scenario.queue - baseQueue;
+                return (
+                  <div key={scenario.key} className={`comparative-scenario-card ${scenario.key === 'base' ? 'base-scenario' : 'opt-scenario'}`}>
+                    <div className="scenario-col-header">
+                      <span className={`badge-dot ${scenario.dot}`} />
+                      <span className="col-title">{scenario.title}</span>
+                    </div>
+                    <div className="comp-metric-row">
+                      <span className="comp-label">Cola en Andén Q(t):</span>
+                      <span className="comp-val font-mono tabular-nums">
+                        {scenario.queue} pax
+                        {scenario.key === 'opt' && delta !== 0 && (
+                          <span className="delta-badge">
+                            {delta > 0 ? '+' : ''}
+                            {delta} pax
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="comp-metric-row">
+                      <span className="comp-label">Nivel de Servicio:</span>
+                      <span className="comp-val font-mono">{level.label}</span>
+                    </div>
+                    <div className={`comp-alert-badge ${level.badge}`}>
+                      {level.critical ? <Warning size={12} weight="fill" /> : <CheckCircle size={12} weight="fill" />}
+                      <span>{level.message}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             /* SINGLE STATION VIEW */

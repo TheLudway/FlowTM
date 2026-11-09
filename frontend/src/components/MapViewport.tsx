@@ -16,6 +16,8 @@ interface MapViewportProps {
   selectedEntity: SelectedEntity | null;
   onSelectEntity: (entity: SelectedEntity | null) => void;
   isCameraFollowing?: boolean;
+  /** Live position of the followed bus (shared by both split viewports). */
+  followPoint?: { lat: number; lon: number } | null;
   onStopCameraFollowing?: () => void;
 }
 
@@ -27,6 +29,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
   selectedEntity,
   onSelectEntity,
   isCameraFollowing = false,
+  followPoint = null,
   onStopCameraFollowing,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -67,6 +70,7 @@ export const MapViewport: React.FC<MapViewportProps> = ({
             bus_id: b.bus_id,
             route: b.route,
             color: b.color,
+            is_optimizable: b.is_optimizable ? 1 : 0,
             occupancy_pct: b.occupancy_pct,
             passengers: b.passengers,
             is_stopped: b.is_stopped ? 1 : 0,
@@ -465,9 +469,11 @@ export const MapViewport: React.FC<MapViewportProps> = ({
               bus_id: b.bus_id,
               route: b.route,
               color: b.color,
+              is_optimizable: b.is_optimizable ? 1 : 0,
               occupancy_pct: b.occupancy_pct,
               passengers: b.passengers,
               is_stopped: b.is_stopped ? 1 : 0,
+              is_bunching: b.is_bunching ? 1 : 0,
             },
             geometry: {
               type: 'Point',
@@ -488,11 +494,11 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           source: 'active-buses',
           filter: ['==', ['get', 'is_bunching'], 1],
           paint: {
-            'circle-radius': 22,
-            'circle-color': '#E74C3C',
-            'circle-opacity': 0.25,
-            'circle-stroke-width': 2.2,
+            'circle-radius': ['case', ['==', ['get', 'is_optimizable'], 1], 19, 13],
+            'circle-color': 'transparent',
+            'circle-stroke-width': 2.4,
             'circle-stroke-color': '#F39C12',
+            'circle-stroke-opacity': 0.95,
           },
         });
 
@@ -502,9 +508,9 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           type: 'circle',
           source: 'active-buses',
           paint: {
-            'circle-radius': ['match', ['get', 'bus_type'], 'biarticulado', 20, 15],
+            'circle-radius': ['case', ['==', ['get', 'is_optimizable'], 1], 16, 9],
             'circle-color': ['coalesce', ['get', 'color'], '#9E9E9E'],
-            'circle-opacity': 0.45,
+            'circle-opacity': ['case', ['==', ['get', 'is_optimizable'], 1], 0.45, 0.2],
             'circle-blur': 0.5,
           },
         });
@@ -515,9 +521,9 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           type: 'circle',
           source: 'active-buses',
           paint: {
-            'circle-radius': ['match', ['get', 'bus_type'], 'biarticulado', 13.5, 10.5],
+            'circle-radius': ['case', ['==', ['get', 'is_optimizable'], 1], 11, 7],
             'circle-color': 'transparent',
-            'circle-stroke-width': 2.2,
+            'circle-stroke-width': ['case', ['==', ['get', 'is_optimizable'], 1], 2.4, 1.6],
             'circle-stroke-color': [
               'step',
               ['get', 'occupancy_pct'],
@@ -550,21 +556,24 @@ export const MapViewport: React.FC<MapViewportProps> = ({
           type: 'circle',
           source: 'active-buses',
           paint: {
-            'circle-radius': ['match', ['get', 'bus_type'], 'biarticulado', 10.5, 7.5],
+            'circle-radius': ['case', ['==', ['get', 'is_optimizable'], 1], 8, 4.5],
             'circle-color': ['coalesce', ['get', 'color'], '#9E9E9E'],
-            'circle-stroke-width': 2.0,
+            'circle-opacity': ['case', ['==', ['get', 'is_optimizable'], 1], 1, 0.75],
+            'circle-stroke-width': ['case', ['==', ['get', 'is_optimizable'], 1], 2.0, 1.0],
             'circle-stroke-color': isDark ? '#FFFFFF' : '#1A202C',
           },
         });
 
-        // Bus Route label text
+        // Route label (optimized routes only)
         map.addLayer({
           id: 'bus-label',
           type: 'symbol',
           source: 'active-buses',
+          filter: ['==', ['get', 'is_optimizable'], 1],
           layout: {
             'text-field': ['get', 'route'],
-            'text-size': ['match', ['get', 'bus_type'], 'biarticulado', 9.5, 8.0],
+            'text-size': 8.5,
+            'text-offset': [0, -1.5],
             'text-allow-overlap': true,
             'text-font': ['Noto Sans Bold'],
           },
@@ -617,17 +626,14 @@ export const MapViewport: React.FC<MapViewportProps> = ({
   useEffect(() => {
     updateBusesSource();
 
-    if (isCameraFollowing && selectedEntity?.type === 'bus' && mapRef.current) {
-      const targetBus = activeBusesRef.current.find((b) => b.bus_id === selectedEntity.id);
-      if (targetBus) {
-        mapRef.current.easeTo({
-          center: [targetBus.lon, targetBus.lat],
-          duration: 100,
-          easing: (t) => t,
-        });
-      }
+    if (isCameraFollowing && followPoint && mapRef.current) {
+      mapRef.current.easeTo({
+        center: [followPoint.lon, followPoint.lat],
+        duration: 100,
+        easing: (t) => t,
+      });
     }
-  }, [activeBuses, isCameraFollowing, selectedEntity]);
+  }, [activeBuses, isCameraFollowing, followPoint]);
 
   // Update stations when queues change
   useEffect(() => {
