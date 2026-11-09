@@ -6,7 +6,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
     volumes:
-      - ./data/raw:/app/data/raw:ro
+      - ./data/raw:/app/data/raw
       - ./data/processed:/app/data/processed
       - scenario-data:/app/data/scenarios/piloto
       - frontend-data:/app/frontend/public/data
@@ -14,6 +14,7 @@ services:
       - sh
       - -c
       - |
+        find /app/data/raw -type f -name '*.7z' -exec sh -c 'for archive do 7z x -aoa "$$archive" -o"$$(dirname "$$archive")"; done' sh {} + &&
         uv run --no-sync marimo export script notebooks/data_processing/01_convert_to_parquet.py -o /tmp/01_convert_to_parquet.py --force &&
         uv run --no-sync python /tmp/01_convert_to_parquet.py &&
         uv run --no-sync marimo export script notebooks/gtfs/02_limpieza.py -o notebooks/gtfs/.docker_limpieza.py --force &&

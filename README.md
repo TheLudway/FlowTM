@@ -165,7 +165,9 @@ limpieza (Marimo) y después los pasos `01_preparar_escenario.py`,
 `02_correr_simulador_base.py`, `03_optimizar_frecuencias.py` y
 `export_frontend_data.py`; así regenera desde cero la telemetría que consume el
 mapa. Los datos crudos y procesados no se copian a la imagen porque ocupan
-varios GB: se montan desde `data/raw/` y `data/processed/`.
+varios GB: se montan desde `data/raw/` y `data/processed/`. Si `data/raw/`
+contiene archivos `.7z`, Compose los descomprime automáticamente en ese
+directorio antes de ejecutar los notebooks.
 
 ```bash
 docker compose up --build -d
