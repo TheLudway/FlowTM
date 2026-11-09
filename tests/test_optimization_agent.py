@@ -82,7 +82,7 @@ def test_neighbor_generation_is_reproducible_with_seed():
 
 def test_optimizer_rejects_infeasible_initial_state(synthetic_scenario_dir: Path):
     optimizer = SimulatedAnnealingOptimizer(
-        synthetic_scenario_dir, iterations=1, verbose=False
+        synthetic_scenario_dir, budget=2, seeds=[1], verbose=False, workers=1
     )
     with pytest.raises(ValueError, match="supera la flota"):
         optimizer.optimize(make_state(max_fleet=10))
@@ -90,7 +90,7 @@ def test_optimizer_rejects_infeasible_initial_state(synthetic_scenario_dir: Path
 
 def test_optimizer_returns_feasible_best_state(synthetic_scenario_dir: Path):
     optimizer = SimulatedAnnealingOptimizer(
-        synthetic_scenario_dir, iterations=3, seed=42, verbose=False
+        synthetic_scenario_dir, budget=8, seeds=[1, 2], verbose=False, workers=1
     )
     initial_state = CorridorScenario.load(synthetic_scenario_dir).base_schedule()
 
@@ -98,24 +98,24 @@ def test_optimizer_returns_feasible_best_state(synthetic_scenario_dir: Path):
 
     assert best_state.is_fleet_feasible()
     assert best_result.total_dispatched_buses > 0
-    assert len(optimizer.history) == 4
-    assert all(
-        entry["fleet_used"] <= initial_state.max_fleet for entry in optimizer.history
-    )
+    assert optimizer.result is not None and optimizer.result.evaluations <= 8
     assert optimizer.history[-1]["best_utility"] >= optimizer.history[0]["utility"]
 
 
 def test_optimizer_is_reproducible_with_seed(synthetic_scenario_dir: Path):
     initial_state = CorridorScenario.load(synthetic_scenario_dir).base_schedule()
-
     runs = []
     for _ in range(2):
         optimizer = SimulatedAnnealingOptimizer(
-            synthetic_scenario_dir, iterations=3, seed=2026, verbose=False
+            synthetic_scenario_dir,
+            budget=6,
+            seeds=[1, 2],
+            seed=2026,
+            verbose=False,
+            workers=1,
         )
         best_state, _ = optimizer.optimize(initial_state)
         runs.append((best_state.headways, [h["headways"] for h in optimizer.history]))
-
     assert runs[0] == runs[1]
 
 

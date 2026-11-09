@@ -9,165 +9,141 @@
 """
 scripts/03_optimizar_frecuencias.py
 ===================================
-High-fidelity Multi-objective Optimization and Telemetry Export (Before vs. After).
-FlowTM - Digital Twin Rational Agent Engine
-Implements Avance II Academic Specification:
-- Multi-criteria Utility Function U(S)
-- Strict Physical Fleet Constraint (B_max = current GTFS fleet of the routes)
-- Simulated Annealing Metaheuristic
-- Standard GTFS frequencies.txt Exporter
+Rational agent (Simulated Annealing) over the GTFS-grounded corridor scenario.
+
+1. The agent maximizes the expected utility U(S) over 5 *training* seeds
+   (common random numbers), subject to the physical fleet bound B_max.
+2. The best schedule is validated out of sample on 30 *holdout* seeds that the
+   search never saw (paired difference, 95% CI, wins).
+3. Exports the optimized telemetry (seed 42, for the OCC replay), the GTFS
+   ``frequencies.txt`` actuator and ``ai_optimization_log.json``.
 """
 
 import json
 from pathlib import Path
 
 from flowtm.infrastructure.gtfs_exporter import export_gtfs_frequencies
-from flowtm.optimization.simulated_annealing import SimulatedAnnealingOptimizer
-from flowtm.optimization.utility import UtilityCalculator
+from flowtm.optimization.evaluator import holdout_comparison
+from flowtm.optimization.simulated_annealing import (
+    DEFAULT_TRAINING_SEEDS,
+    SimulatedAnnealingOptimizer,
+)
 from flowtm.simulation.collector import export_summary_metrics
 from flowtm.simulation.engine import CorridorSimulator
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-scenario_dir = ROOT_DIR / "data/scenarios/piloto"
-opt_telemetry_dir = scenario_dir / "telemetria_opt"
-opt_telemetry_dir.mkdir(parents=True, exist_ok=True)
+SCENARIO_DIR = ROOT_DIR / "data/scenarios/piloto"
+OPT_TELEMETRY_DIR = SCENARIO_DIR / "telemetria_opt"
+BASE_TELEMETRY_DIR = SCENARIO_DIR / "telemetria_base"
 
-print("=" * 80)
-print("OPTIMIZACIÓN: AGENTE HEURÍSTICO MULTIOBJETIVO - FlowTM")
-print("Avance II: Formulación del Problema como Agente Inteligente")
-print("=" * 80)
+BUDGET = 150  # distinct schedule evaluations (x 5 seeds each)
+REPLAY_SEED = 42
+HOLDOUT_SEEDS = tuple(range(42, 72))
 
-# 1. Current operation (mean AM-peak GTFS headways of the optimizable routes)
-base_simulator = CorridorSimulator(scenario_dir)
-base_state = base_simulator.scenario.base_schedule()
-base_headways = base_state.headways
-base_fleet = base_state.total_fleet_used()
 
-print(f"\n[INFO] Horario inicial (GTFS): {base_headways}")
-print(f"[INFO] Flota requerida (base): {base_fleet}/{base_state.max_fleet} buses")
+def evaluation_summary(evaluation) -> dict:
+    """Expected KPIs of a schedule over the training seeds."""
+    metrics = evaluation.metrics
+    return {
+        "headways": evaluation.headways,
+        "fleet_used": evaluation.fleet_used,
+        "utility": round(evaluation.utility, 4),
+        "utility_se": round(evaluation.standard_error(), 4),
+        "breakdown": evaluation.breakdown,
+        "wait_time_min": round(metrics["avg_waiting_time_min"], 3),
+        "stranded_pax": round(metrics["stranded_passengers_in_queue"]),
+        "overcrowded_pct": round(metrics["overcrowded_bus_pct"], 2),
+        "transported_pax": round(metrics["total_transported_passengers"]),
+        "dispatch_delay_min": round(metrics["avg_dispatch_delay_min"], 3),
+    }
 
-base_results = base_simulator.simulate(base_headways)
-base_telemetry_dir = scenario_dir / "telemetria_base"
-base_simulator.collector.export_telemetry(base_telemetry_dir)
 
-utility_calc = UtilityCalculator(max_fleet=base_state.max_fleet)
-base_breakdown = utility_calc.evaluate_breakdown(base_results, fleet_used=base_fleet)
-base_utility = base_breakdown["utility"]
+def main() -> None:
+    print("=" * 80)
+    print("OPTIMIZACIÓN: AGENTE RACIONAL (RECOCIDO SIMULADO) - FlowTM")
+    print("=" * 80)
+    OPT_TELEMETRY_DIR.mkdir(parents=True, exist_ok=True)
 
-# 2. Run Rational Agent Search (30 iterations)
-optimizer = SimulatedAnnealingOptimizer(
-    scenario_dir, iterations=30, initial_temp=75.0, cooling_rate=0.88
-)
-best_state, best_opt_results = optimizer.optimize(base_state)
-best_fleet = best_state.total_fleet_used()
-best_breakdown = utility_calc.evaluate_breakdown(
-    best_opt_results, fleet_used=best_fleet
-)
-best_utility = best_breakdown["utility"]
+    simulator = CorridorSimulator(SCENARIO_DIR)
+    scenario = simulator.scenario
+    base_state = scenario.base_schedule()
+    print(f"[INFO] Horario inicial (GTFS): {base_state.headways}")
+    print(f"[INFO] Flota: {base_state.total_fleet_used()}/{base_state.max_fleet} buses")
 
-# 3. Simulate winning schedule and export optimized telemetry
-print("\n[INFO] Exportando telemetría del escenario optimizado...")
-opt_simulator = CorridorSimulator(scenario_dir)
-opt_results = opt_simulator.simulate(best_state.headways)
-opt_simulator.collector.export_telemetry(opt_telemetry_dir)
-export_summary_metrics(opt_results, opt_telemetry_dir)
-print(f"[INFO] Telemetría optimizada guardada en: {opt_telemetry_dir}")
-
-# 4. Export GTFS frequencies.txt (Official PEAS Actuator)
-gtfs_file = export_gtfs_frequencies(
-    best_state.headways, opt_telemetry_dir / "frequencies.txt"
-)
-print(f"[INFO] Actuador PEAS: horario GTFS exportado en {gtfs_file}")
-
-# 5. Export AI Optimization Convergence History
-opt_log_path = opt_telemetry_dir / "ai_optimization_log.json"
-opt_log_data = {
-    "baseline": {
-        "headways": base_headways,
-        "fleet_used": base_fleet,
-        "utility": base_utility,
-        "breakdown": base_breakdown,
-        "wait_time_min": base_results.avg_waiting_time_min,
-        "stranded_pax": base_results.stranded_passengers_in_queue,
-        "overcrowded_pct": base_results.overcrowded_bus_pct,
-        "transported_pax": base_results.total_transported_passengers,
-    },
-    "optimized": {
-        "headways": best_state.headways,
-        "fleet_used": best_fleet,
-        "utility": best_utility,
-        "breakdown": best_breakdown,
-        "wait_time_min": opt_results.avg_waiting_time_min,
-        "stranded_pax": opt_results.stranded_passengers_in_queue,
-        "overcrowded_pct": opt_results.overcrowded_bus_pct,
-        "transported_pax": opt_results.total_transported_passengers,
-    },
-    "delta_utility": round(best_utility - base_utility, 4),
-    "max_fleet": base_state.max_fleet,
-    "optimizable_routes": base_simulator.scenario.optimizable_routes,
-    "background_routes": base_simulator.scenario.background_routes,
-    "history": optimizer.history,
-}
-with open(opt_log_path, "w", encoding="utf-8") as f:
-    json.dump(opt_log_data, f, indent=2)
-print(f"[INFO] Historial de convergencia del agente exportado en: {opt_log_path}")
-
-# 6. Success Metrics Verification Table (Section 8 of Document)
-delta_wait = (
-    (opt_results.avg_waiting_time_min - base_results.avg_waiting_time_min)
-    / max(1e-3, base_results.avg_waiting_time_min)
-) * 100
-delta_stranded = (
-    (
-        opt_results.stranded_passengers_in_queue
-        - base_results.stranded_passengers_in_queue
+    # 1. Search on the training seeds.
+    optimizer = SimulatedAnnealingOptimizer(
+        SCENARIO_DIR, budget=BUDGET, seeds=DEFAULT_TRAINING_SEEDS
     )
-    / max(1, base_results.stranded_passengers_in_queue)
-) * 100
-delta_trans = (
-    (
-        opt_results.total_transported_passengers
-        - base_results.total_transported_passengers
+    best_state, _ = optimizer.optimize(base_state)
+    search = optimizer.result
+    assert search is not None
+
+    # 2. Out-of-sample validation on unseen seeds.
+    print(f"\n[INFO] Validación fuera de muestra con {len(HOLDOUT_SEEDS)} semillas...")
+    holdout = holdout_comparison(SCENARIO_DIR, base_state, best_state, HOLDOUT_SEEDS)
+
+    # 3. Replay telemetry (one seed) for the OCC and the GTFS actuator.
+    for state, directory in (
+        (base_state, BASE_TELEMETRY_DIR),
+        (best_state, OPT_TELEMETRY_DIR),
+    ):
+        replay = CorridorSimulator(SCENARIO_DIR)
+        result = replay.simulate(state.headways, seed=REPLAY_SEED)
+        replay.collector.export_telemetry(directory)
+        export_summary_metrics(result, directory)
+    gtfs_file = export_gtfs_frequencies(
+        best_state.headways, OPT_TELEMETRY_DIR / "frequencies.txt"
     )
-    / max(1, base_results.total_transported_passengers)
-) * 100
-delta_overcrowded = opt_results.overcrowded_bus_pct - base_results.overcrowded_bus_pct
-delta_u = best_utility - base_utility
+    print(f"[INFO] Actuador PEAS: horario GTFS exportado en {gtfs_file}")
 
-print("\n" + "=" * 80)
-print("RESULTADOS FINALES: CUMPLIMIENTO DE METAS DEL AVANCE II (Sección 8)")
-print("=" * 80)
-print(
-    f"{'MÉTRICA':<32} | {'META (Sección 8)':<20} | {'BASE':<10} | {'OPTIMIZADO':<10} | {'ESTADO'}"
-)
-print("-" * 80)
+    log = {
+        "algorithm": search.algorithm,
+        "config": {
+            **search.params,
+            "training_seeds": list(DEFAULT_TRAINING_SEEDS),
+            "evaluations": search.evaluations,
+            "simulations": search.evaluations * len(DEFAULT_TRAINING_SEEDS),
+        },
+        "baseline": evaluation_summary(search.initial),
+        "optimized": evaluation_summary(search.best),
+        "delta_utility": round(search.delta_utility, 4),
+        "holdout": holdout,
+        "max_fleet": base_state.max_fleet,
+        "optimizable_routes": scenario.optimizable_routes,
+        "background_routes": scenario.background_routes,
+        "history": search.history,
+    }
+    log_path = OPT_TELEMETRY_DIR / "ai_optimization_log.json"
+    log_path.write_text(
+        json.dumps(log, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(f"[INFO] Historial del agente exportado en: {log_path}")
 
-status_wait = "CUMPLE" if delta_wait <= -15.0 else f"ALCANZADO ({delta_wait:+.1f}%)"
-print(
-    f"{'Tiempo Medio Espera (W_prom)':<32} | {'Reducción >= 15%':<20} | {base_results.avg_waiting_time_min:>8.2f}m | {opt_results.avg_waiting_time_min:>8.2f}m | {status_wait}"
-)
+    # 4. Results table (training expectation and out-of-sample validation).
+    wait = holdout["espera_min"]
+    utility = holdout["utilidad"]
+    print("\n" + "=" * 80)
+    print("RESULTADOS: ENTRENAMIENTO (5 SEMILLAS) Y VALIDACIÓN (30 SEMILLAS NUEVAS)")
+    print("=" * 80)
+    print(f"[INFO] Horario óptimo: {best_state.headways}")
+    print(
+        f"[INFO] Flota: {search.initial.fleet_used} -> {search.best.fleet_used} (cota {base_state.max_fleet})"
+    )
+    print(
+        f"[INFO] Entrenamiento: U(S) {search.initial.utility:.4f} -> {search.best.utility:.4f} "
+        f"(ΔU = {search.delta_utility:+.4f})"
+    )
+    print(
+        f"[INFO] Validación espera: {wait['base']:.3f} -> {wait['candidato']:.3f} min "
+        f"({wait['diferencia_pct']:+.2f}%), IC 95% {wait['ic95']}, "
+        f"mejor en {wait['semillas_mejor']}/{wait['semillas']} semillas"
+    )
+    print(
+        f"[INFO] Validación utilidad: ΔU = {utility['diferencia']:+.4f}, IC 95% {utility['ic95']}, "
+        f"{'significativa' if utility['significativo'] else 'no significativa'}"
+    )
+    print("=" * 80)
 
-status_stranded = (
-    "CUMPLE" if delta_stranded <= -25.0 else f"ALCANZADO ({delta_stranded:+.1f}%)"
-)
-print(
-    f"{'Pasajeros en Andén (Q_rem)':<32} | {'Reducción >= 25%':<20} | {base_results.stranded_passengers_in_queue:>8,d}  | {opt_results.stranded_passengers_in_queue:>8,d}  | {status_stranded}"
-)
 
-status_fleet = "CUMPLE" if best_state.is_fleet_feasible() else "EXCEDIDO"
-print(
-    f"{'Uso Total de Flota (B_usados)':<32} | {f'<= {best_state.max_fleet} buses':<20} | {base_fleet:>8d}  | {best_fleet:>8d}  | {status_fleet}"
-)
-
-status_u = "CUMPLE" if delta_u > 0 else "SIN GANANCIA"
-print(
-    f"{'Ganancia Utilidad (ΔU)':<32} | {'ΔU > 0 (Meseta)':<20} | {base_utility:>8.2f}  | {best_utility:>8.2f}  | {status_u} (ΔU={delta_u:+.2f})"
-)
-
-print(
-    f"{'Sobrecupo Crítico (>=95%)':<32} | {'Contención':<20} | {base_results.overcrowded_bus_pct:>7.1f}% | {opt_results.overcrowded_bus_pct:>7.1f}% | {delta_overcrowded:>+6.1f} pts"
-)
-print(
-    f"{'Pasajeros Transportados':<32} | {'Aumento':<20} | {base_results.total_transported_passengers:>8,d}  | {opt_results.total_transported_passengers:>8,d}  | {delta_trans:>+6.1f}%"
-)
-print("=" * 80)
+if __name__ == "__main__":
+    main()
