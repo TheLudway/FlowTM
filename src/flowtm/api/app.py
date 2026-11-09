@@ -67,6 +67,11 @@ _simulator_lock = threading.Lock()
 _jobs: dict[str, "queue.Queue[dict[str, Any] | None]"] = {}
 
 
+@app.get("/healthz")
+def healthcheck() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 def simulator() -> CorridorSimulator:
     global _simulator
     if _simulator is None:
