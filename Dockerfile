@@ -16,7 +16,9 @@ COPY LICENSE LICENSE-2 ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
+COPY scripts ./scripts
 COPY data/scenarios ./data/scenarios
+COPY frontend/public/data ./frontend/public/data
 
 RUN uv sync --frozen --no-dev
 
