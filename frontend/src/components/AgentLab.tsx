@@ -9,6 +9,7 @@ import type {
   ReplayPayload,
   RouteConfig,
 } from '../types';
+import './AgentLab.css';
 
 type Algorithm = 'recocido_simulado' | 'hill_climbing' | 'busqueda_aleatoria';
 type Status = 'idle' | 'running' | 'done' | 'error';
