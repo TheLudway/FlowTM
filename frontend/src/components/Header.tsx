@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Brain,
   Bus,
   ChartLineUp,
   Columns,
@@ -93,6 +94,14 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <ChartLineUp size={15} weight={activeView === 'analytics' ? 'fill' : 'bold'} />
             <span className="tab-label">Analítica & KPIs</span>
+          </button>
+          <button
+            className={`view-tab-btn ${activeView === 'agent' ? 'active' : ''}`}
+            onClick={() => onChangeView('agent')}
+            title="Configurar y ejecutar el agente racional en vivo"
+          >
+            <Brain size={15} weight={activeView === 'agent' ? 'fill' : 'bold'} />
+            <span className="tab-label">Laboratorio IA</span>
           </button>
         </div>
       </div>

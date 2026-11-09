@@ -697,7 +697,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="iteration-docked-strip">
                 <div className="docked-left-badge">
                   <span className="strip-title">ITERACIÓN {activeInspectorIteration.iteration} / {totalIterations}</span>
-                  <span className="strip-temp font-mono">T = {activeInspectorIteration.temperature}°C</span>
+                  <span className="strip-temp font-mono">T = {activeInspectorIteration.temperature?.toFixed(4) ?? '—'}</span>
                   {activeInspectorIteration.is_new_best && (
                     <span className="strip-optimum-tag">★ NUEVO ÓPTIMO</span>
                   )}
