@@ -55,6 +55,77 @@ const formatSigned = (value: number | undefined, digits: number, suffix = ''): s
 const formatFixed = (value: number | undefined, digits: number): string =>
   value === undefined ? PLACEHOLDER : value.toFixed(digits);
 
+/** U(S) terms as stored in the optimizer log breakdown (utility.py). */
+const UTILITY_TERMS: {
+  key: string;
+  label: string;
+  weight: string;
+  help: string;
+  value: (side?: AIOptimizationLog['baseline']) => string;
+}[] = [
+  {
+    key: 'w_wait_term',
+    label: 'Tiempo de espera',
+    weight: '0.40',
+    help: 'Minutos promedio que un pasajero espera en el andén.',
+    value: (side) => (side ? `${side.wait_time_min.toFixed(2)} min` : PLACEHOLDER),
+  },
+  {
+    key: 'w_overcrowd_term',
+    label: 'Sobrecupo (≥ 95%)',
+    weight: '0.30',
+    help: 'Fracción de llegadas de bus con ocupación ≥ 95%, castigada con exponente 1.5 (el hacinamiento extremo pesa más).',
+    value: (side) => (side ? `${side.overcrowded_pct.toFixed(2)}%` : PLACEHOLDER),
+  },
+  {
+    key: 'w_stranded_term',
+    label: 'Pasajeros varados',
+    weight: '0.15',
+    help: 'Personas que siguen esperando en los andenes a las 09:00 (por miles).',
+    value: (side) => (side ? `${Math.round(side.stranded_pax).toLocaleString()} pax` : PLACEHOLDER),
+  },
+  {
+    key: 'w_fleet_term',
+    label: 'Uso de flota',
+    weight: '0.15',
+    help: 'Buses usados respecto a la cota de flota (usar menos buses mejora la utilidad).',
+    value: (side) => (side ? `${side.fleet_used} buses` : PLACEHOLDER),
+  },
+];
+
+/** Headline KPI of the executive summary (paired out-of-sample difference). */
+const ExecCard: React.FC<{
+  label: string;
+  stat: PairedStat;
+  digits: number;
+  unit?: string;
+  absolute?: boolean;
+  help: string;
+}> = ({ label, stat, digits, unit = '', absolute = false, help }) => {
+  const tone = !stat.significativo ? 'neutral' : stat.mejora ? 'good' : 'bad';
+  const change = absolute
+    ? `${stat.diferencia >= 0 ? '+' : ''}${stat.diferencia.toFixed(digits)}`
+    : `${stat.diferencia_pct >= 0 ? '+' : ''}${stat.diferencia_pct.toFixed(2)}%`;
+  return (
+    <div className={`exec-card tone-${tone}`}>
+      <span className="exec-card-label">
+        {label}
+        <MetricTooltip title={label} description={help} />
+      </span>
+      <span className="exec-card-value font-mono tabular-nums">{change}</span>
+      <span className="exec-card-sub font-mono tabular-nums">
+        {stat.base.toFixed(digits)}
+        {unit} → {stat.candidato.toFixed(digits)}
+        {unit}
+      </span>
+      <span className="exec-card-sub">
+        {tone === 'good' ? 'mejora confirmada' : tone === 'bad' ? 'empeora (confirmado)' : 'sin cambio demostrable'} ·{' '}
+        {stat.semillas_mejor}/{stat.semillas} días
+      </span>
+    </div>
+  );
+};
+
 const ALGORITHM_NAMES: Record<string, string> = {
   recocido_simulado: 'Recocido simulado',
   hill_climbing: 'Hill climbing',
@@ -175,11 +246,17 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const optDispatches = summaryOpt?.total_dispatched_buses;
 
   // SVG Chart bounds
+  // Scale fitted to the observed utilities (a fixed [-2.4, -1.85] range flattened the curve).
   const chartMetrics = useMemo(() => {
-    const utils = history.map((h: AIOptimizationIteration) => h.utility);
-    const minU = Math.min(-2.4, ...utils);
-    const maxU = Math.max(-1.85, ...utils);
-    return { minU, maxU, range: Math.max(0.1, maxU - minU) };
+    const utils = history.flatMap((h: AIOptimizationIteration) => [h.utility, h.best_utility]);
+    if (!utils.length) return { minU: -1, maxU: 0, range: 1, ticks: [] as number[] };
+    const lo = Math.min(...utils);
+    const hi = Math.max(...utils);
+    const pad = Math.max(0.002, (hi - lo) * 0.12);
+    const minU = lo - pad;
+    const maxU = hi + pad;
+    const range = maxU - minU;
+    return { minU, maxU, range, ticks: [0.15, 0.5, 0.85].map((f) => minU + f * range) };
   }, [history]);
 
   const svgWidth = 840;
@@ -201,6 +278,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     if (!history.length) return '';
     return history
       .map((h: AIOptimizationIteration, i: number) => `${i === 0 ? 'M' : 'L'} ${getSvgX(h.iteration).toFixed(1)} ${getSvgY(h.utility).toFixed(1)}`)
+      .join(' ');
+  }, [history, chartMetrics]);
+
+  // Best-so-far curve: the agent's convergence (never decreases).
+  const bestPath = useMemo(() => {
+    if (!history.length) return '';
+    return history
+      .map((h: AIOptimizationIteration, i: number) => `${i === 0 ? 'M' : 'L'} ${getSvgX(h.iteration).toFixed(1)} ${getSvgY(h.best_utility).toFixed(1)}`)
       .join(' ');
   }, [history, chartMetrics]);
 
@@ -393,7 +478,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           {/* Route Dispatch Balance */}
           <div className="analytics-section-card">
             <div className="section-title-with-tooltip">
-              <h4 className="section-card-title">FRECUENCIAS Y DESPACHOS POR RUTA</h4>
+              <h4 className="section-card-title">FRECUENCIA DE LAS 6 RUTAS DE LA IA</h4>
               <MetricTooltip
                 title="Intervalo de Despacho (Headway)"
                 description="Tiempo en minutos entre buses sucesivos de la misma ruta (Vector H en [2.0, 15.0]^6)."
@@ -408,8 +493,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </p>
 
             <div className="route-balance-list">
-              {[...routes]
-                .sort((a, b) => Number(b.role === 'optimizable') - Number(a.role === 'optimizable'))
+              {routes
+                .filter((r) => r.role === 'optimizable')
                 .map((r: RouteConfig) => {
                 const headway = (activeHeadways as any)[r.id] ?? r.headway_min;
                 const baseH = (aiLog?.baseline?.headways as any)?.[r.id] ?? r.headway_min;
@@ -505,13 +590,58 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         )}
 
         {/* ==================================================================
+            RESUMEN: veredicto validado fuera de muestra
+            ================================================================== */}
+        <section className="analytics-section-card exec-summary">
+          <div className="section-card-header">
+            <div>
+              <div className="section-title-with-tooltip">
+                <h3 className="section-card-title">RESUMEN: ¿LA IA MEJORA LA OPERACIÓN?</h3>
+                <MetricTooltip
+                  title="Cómo se obtuvo este resumen"
+                  description="El horario de la IA y la operación actual se simularon en días que la IA nunca vio durante su búsqueda, con los mismos pasajeros en ambos casos. Se compara día por día."
+                  interpretation="Verde = mejora confirmada estadísticamente (intervalo de confianza al 95% sin el cero). Rojo = empeora de forma confirmada. Gris = sin cambio demostrable."
+                />
+              </div>
+              <p className="section-card-subtitle">
+                {holdout
+                  ? `Validado en ${holdout.utilidad.semillas} días simulados nuevos, frente a la operación actual de TransMilenio.`
+                  : 'Sin validación fuera de muestra disponible.'}
+              </p>
+            </div>
+          </div>
+          {holdout && (
+            <>
+              <p className={`exec-verdict ${holdout.utilidad.significativo && holdout.utilidad.mejora ? 'good' : 'neutral'}`}>
+                {holdout.utilidad.significativo && holdout.utilidad.mejora
+                  ? `Sí: con ${optFleet ?? PLACEHOLDER} buses (hoy ${baseFleet ?? PLACEHOLDER}) la IA reduce el hacinamiento y mejora la utilidad de forma significativa; a cambio la espera media cambia ${formatSigned(holdout.espera_min.diferencia_pct, 2, '%')}.`
+                  : 'La mejora de la utilidad no es estadísticamente significativa con días nuevos.'}
+              </p>
+              <div className="exec-cards">
+                <ExecCard label="Utilidad U(S)" stat={holdout.utilidad} digits={4} absolute help="Nota global del horario: combina espera, hacinamiento, pasajeros varados y flota según los pesos del proyecto." />
+                <ExecCard label="Buses con sobrecupo ≥ 95%" stat={holdout.sobrecupo_pct} digits={2} unit="%" help="Porcentaje de llegadas de bus a una estación con el bus casi lleno." />
+                <ExecCard label="Espera media en andén" stat={holdout.espera_min} digits={3} unit=" min" help="Minutos promedio que espera un pasajero." />
+                <ExecCard label="Pasajeros transportados" stat={holdout.transportados} digits={0} help="Personas que abordaron un bus entre 06:00 y 09:00." />
+                <div className="exec-card">
+                  <span className="exec-card-label">Flota física</span>
+                  <span className="exec-card-value font-mono tabular-nums">
+                    {baseFleet ?? PLACEHOLDER} → {optFleet ?? PLACEHOLDER}
+                  </span>
+                  <span className="exec-card-sub">buses · cota {MAX_FLEET} (sin compras)</span>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* ==================================================================
             FASE 1: DIAGNÓSTICO DE DEMANDA - MATRIZ ORIGEN - DESTINO (TULLAVE)
             ================================================================== */}
         <section className="analytics-section-card">
           <div className="section-card-header">
             <div>
               <div className="section-title-with-tooltip">
-                <h3 className="section-card-title">1. MATRIZ DE DESEO Y DEMANDA ORIGEN - DESTINO (VALIDADA TULLAVE)</h3>
+                <h3 className="section-card-title">1. ¿A DÓNDE VIAJA LA GENTE? (MATRIZ ORIGEN – DESTINO)</h3>
                 <MetricTooltip
                   title="Matriz Origen-Destino (Demanda TuLlave)"
                   description="Viajes simulados por par origen–destino. El origen viene de las validaciones de entrada; el destino, de un modelo gravitacional sobre las salidas observadas (el recaudo troncal no registra el destino de cada viaje)."
@@ -524,7 +654,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 tullave y destinos según las salidas AM observadas (modelo gravitacional).
               </p>
             </div>
-            <span className="badge-tullave font-mono">MATRICES TULLAVE VALIDADA</span>
+            <span className="badge-tullave font-mono">DEMANDA: VALIDACIONES TULLAVE</span>
           </div>
 
           <div className="od-flow-grid">
@@ -567,13 +697,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <div>
               <h3 className="section-card-title">
                 {isSplitView
-                  ? '2. COMPARATIVA OPERATIVA DIRECTA: LÍNEA BASE OFICIAL vs. HORARIO OPTIMIZADO FLOWTM'
-                  : '2. AUDITORÍA OPERATIVA EN TIEMPO REAL: LÍNEA BASE (GTFS OFICIAL TRANSMILENIO)'}
+                  ? '2. OPERACIÓN COMPARADA: ACTUAL (GTFS) vs. HORARIO DEL AGENTE'
+                  : '2. OPERACIÓN ACTUAL (GTFS DE TRANSMILENIO)'}
               </h3>
               <p className="section-card-subtitle">
-                {isSplitView
-                  ? `Contraste simultáneo de telemetría física: ${baseFleet ?? PLACEHOLDER} buses estáticos vs. ${optFleet ?? PLACEHOLDER} buses reprogramados algorítmicamente.`
-                  : `Indicadores de servicio actuales con ${baseFleet ?? PLACEHOLDER} buses y despachos históricos estáticos (06:00 - 09:00 AM).`}
+                Una simulación de 06:00 a 09:00 (semilla 42), la misma que reproduce el mapa. Las colas por estación
+                cambian con el reloj. La conclusión estadística (30 semillas) está en el resumen y en las metas.
               </p>
             </div>
 
@@ -620,11 +749,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
 
             <div className="hero-text-row">
-              <h2 className="hero-title">3. Ingeniería del Agente IA: FlowTM-Scheduler</h2>
+              <h2 className="hero-title">3. ¿Cómo decide la IA?</h2>
               <p className="hero-subtitle">
-                Demostración formal de la optimización heurística en el gemelo digital SimPy. El agente explora
-                el espacio continuo de frecuencias H &isin; [2.0, 15.0]⁶ respetando la restricción presupuestal estricta
-                de flota (&le; {MAX_FLEET} buses) y guiándose por la función de utilidad multi-criterio U(S).
+                El agente prueba horarios H &isin; [2, 15]⁶ (minutos entre buses de cada ruta), simula cada uno en el
+                gemelo digital y lo califica con la utilidad U(S). Nunca usa más de {MAX_FLEET} buses. La tabla muestra
+                qué término de U(S) mejoró y el gráfico cómo convergió la búsqueda.
               </p>
             </div>
           </div>
@@ -681,7 +810,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   />
                 </div>
                 <p className="panel-main-subtitle">
-                  Evolución de la utilidad durante {totalIterations} iteraciones de exploración en ℝ⁶. Pasa el cursor por cada punto para inspeccionar el estado estocástico.
+                  Verde: mejor utilidad encontrada (nunca baja). Azul: utilidad del horario en el que está el agente; baja
+                  cuando acepta empeorar para explorar. {totalIterations} iteraciones; pase el cursor por un punto para ver ese
+                  horario.
                 </p>
               </div>
 
@@ -716,13 +847,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 </defs>
 
                 {/* Grid horizontal reference lines */}
-                {[-2.3, -2.1, -1.9].map((u) => {
+                {chartMetrics.ticks.map((u) => {
                   const y = getSvgY(u);
                   return (
                     <g key={u}>
                       <line x1={padX} y1={y} x2={svgWidth - padX} y2={y} stroke="var(--border-subtle)" strokeDasharray="3 3" />
                       <text x={padX - 8} y={y + 4} fill="var(--text-tertiary)" fontSize="10" textAnchor="end" className="font-mono">
-                        {u.toFixed(2)}
+                        {u.toFixed(3)}
                       </text>
                     </g>
                   );
@@ -739,14 +870,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   strokeDasharray="4 4"
                 />
                 <text x={svgWidth - padX} y={getSvgY(baseULine) - 6} fill="#E53935" fontSize="10.5" textAnchor="end" fontWeight="bold">
-                  Línea Base U₀ = {formatFixed(baseU, 2)}
+                  Operación actual U₀ = {formatFixed(baseU, 4)}
                 </text>
 
                 {/* Area under curve */}
                 <path d={areaPath} fill="url(#chartGradient)" />
 
-                {/* Convergence curve */}
-                <path d={pointsPath} fill="none" stroke="var(--accent-blue)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                {/* Current-state utility (exploration) and best-so-far (convergence) */}
+                <path d={pointsPath} fill="none" stroke="var(--accent-blue)" strokeWidth="1.5" strokeOpacity="0.7" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={bestPath} fill="none" stroke="var(--accent-green)" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
 
                 {/* Data point dots */}
                 {history.map((h: AIOptimizationIteration) => {
@@ -808,43 +940,39 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
             </div>
 
-            {/* 4 Multi-criteria Utility Components Cards */}
-            <div className="utility-weights-breakdown-row">
-              <div className="utility-term-card">
-                <div className="term-top">
-                  <span className="term-weight">w₁ = 0.40</span>
-                  <span className="term-name">TIEMPO ESPERA (W̄)</span>
-                </div>
-                <div className="term-formula font-mono">0.40 &times; {formatFixed(aiLog?.optimized?.wait_time_min, 2)}m</div>
-                <span className="term-sub">Minutos promedio de espera en andén</span>
+            {/* U(S) term by term: current operation vs agent (explains where the gain comes from) */}
+            <div className="utility-breakdown-table">
+              <div className="ubt-row ubt-head">
+                <span>Término de U(S)</span>
+                <span>Peso</span>
+                <span>Actual</span>
+                <span>Agente</span>
+                <span>Costo actual → agente</span>
               </div>
-
-              <div className="utility-term-card">
-                <div className="term-top">
-                  <span className="term-weight">w₂ = 0.30</span>
-                  <span className="term-name">SOBRECUPO (≥95%)^1.5</span>
-                </div>
-                <div className="term-formula font-mono">0.30 &times; ({formatFixed(aiLog ? aiLog.optimized.overcrowded_pct / 10 : undefined, 2)})^1.5</div>
-                <span className="term-sub">Castigo exponencial al hacinamiento</span>
-              </div>
-
-              <div className="utility-term-card">
-                <div className="term-top">
-                  <span className="term-weight">w₃ = 0.15</span>
-                  <span className="term-name">PASAJEROS ANDÉN (Q_rem)</span>
-                </div>
-                <div className="term-formula font-mono">0.15 &times; ({aiLog?.optimized?.stranded_pax ?? PLACEHOLDER} / 1000)</div>
-                <span className="term-sub">Pasajeros no abordados al corte</span>
-              </div>
-
-              <div className="utility-term-card">
-                <div className="term-top">
-                  <span className="term-weight">w₄ = 0.15</span>
-                  <span className="term-name">USO FLOTA (B_usados)</span>
-                </div>
-                <div className="term-formula font-mono">0.15 &times; ({optFleet ?? PLACEHOLDER} / {MAX_FLEET})</div>
-                <span className="term-sub">Flota física consumida &le; {MAX_FLEET} buses</span>
-              </div>
+              {UTILITY_TERMS.map((term) => {
+                const baseCost = aiLog?.baseline?.breakdown?.[term.key];
+                const optCost = aiLog?.optimized?.breakdown?.[term.key];
+                const delta = baseCost !== undefined && optCost !== undefined ? optCost - baseCost : undefined;
+                return (
+                  <div className="ubt-row" key={term.key}>
+                    <span className="ubt-name">
+                      {term.label}
+                      <MetricTooltip title={term.label} description={term.help} />
+                    </span>
+                    <span className="font-mono tabular-nums">{term.weight}</span>
+                    <span className="font-mono tabular-nums">{term.value(aiLog?.baseline)}</span>
+                    <span className="font-mono tabular-nums">{term.value(aiLog?.optimized)}</span>
+                    <span className={`font-mono tabular-nums ${delta === undefined ? '' : delta < 0 ? 'text-success' : delta > 0 ? 'text-alert' : ''}`}>
+                      {formatFixed(baseCost, 4)} → {formatFixed(optCost, 4)}
+                      {delta !== undefined && ` (${formatSigned(delta, 4)})`}
+                    </span>
+                  </div>
+                );
+              })}
+              <p className="ubt-note">
+                U(S) = −(suma de costos): un costo menor sube la utilidad. Valores esperados sobre las semillas de
+                entrenamiento. Aquí se ve de dónde sale la mejora del agente.
+              </p>
             </div>
           </div>
 
@@ -853,7 +981,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <div className="section-card-header">
               <div>
                 <div className="section-title-with-tooltip">
-                  <h4 className="section-card-title">MATRIZ DE CUMPLIMIENTO DE METAS (SECCIÓN 8)</h4>
+                  <h4 className="section-card-title">4. METAS DEL PROYECTO (AVANCE II, SECCIÓN 8)</h4>
                   <MetricTooltip
                     title="Metas evaluadas fuera de muestra"
                     description="Cada meta se evalúa con semillas que el agente nunca vio durante la búsqueda: diferencia pareada entre el horario del agente y la operación actual, con intervalo de confianza al 95%."
@@ -942,7 +1070,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="section-card-header">
                 <div>
                   <div className="section-title-with-tooltip">
-                    <h4 className="section-card-title">EXPERIMENTO: ¿EL RECOCIDO SIMULADO SUPERA A AGENTES MÁS SIMPLES?</h4>
+                    <h4 className="section-card-title">5. ¿POR QUÉ RECOCIDO SIMULADO? (EXPERIMENTO)</h4>
                     <MetricTooltip
                       title="Comparación controlada de algoritmos"
                       description={`Búsqueda aleatoria, hill climbing y recocido simulado con el mismo presupuesto (${comparison.presupuesto_evaluaciones} horarios × ${comparison.semillas_entrenamiento.length} semillas), ${comparison.corridas_por_algoritmo} corridas cada uno, validados con ${comparison.semillas_validacion} semillas nuevas.`}
@@ -991,7 +1119,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <div className="gtfs-delivery-content">
             <div className="gtfs-delivery-text">
               <div className="section-title-with-tooltip">
-                <h3 className="gtfs-delivery-title">4. ACTUADOR PEAS: EXPORTACIÓN DEL ENTREGABLE GTFS (frequencies.txt)</h3>
+                <h3 className="gtfs-delivery-title">6. ENTREGABLE: HORARIO EN FORMATO GTFS (frequencies.txt)</h3>
                 <MetricTooltip
                   title="Actuador GTFS frequencies.txt"
                   description="En la arquitectura de Inteligencia Artificial (PEAS), el actuador es el mecanismo mediante el cual el agente altera su entorno. FlowTM genera el archivo frequencies.txt cumpliendo la especificación internacional GTFS."
@@ -1007,9 +1135,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
               {/* Optimal Vector H* Generated */}
               <div className="gtfs-vector-preview font-mono">
-                <span className="vector-label">Vector Óptimo H* generado:</span>
+                <span className="vector-label">Intervalos (actual → agente):</span>
                 <span className="vector-values">
-                  {Object.entries(gtfsHeadways).map(([r, h]) => `${r}: ${Number(h).toFixed(1)}m`).join('  |  ')}
+                  {Object.entries(gtfsHeadways)
+                    .map(([r, h]) => `${r}: ${formatFixed(baseHeadways[r], 2)} → ${Number(h).toFixed(2)} min`)
+                    .join('  |  ')}
                 </span>
               </div>
             </div>
