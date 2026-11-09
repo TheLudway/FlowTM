@@ -4076,3 +4076,170 @@
 .algo-extra {
   color: var(--text-secondary);
 }
+
+/* ---------------------------------------------------------------------------
+   Route filter: grouped (IA / fondo), scrollable list
+   --------------------------------------------------------------------------- */
+.route-dropdown-menu {
+  width: 340px !important;
+  max-width: calc(100vw - 32px);
+}
+
+.route-dropdown-scroll {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.dropdown-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 6px 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent-blue);
+}
+
+.dropdown-group-note {
+  margin: 0 6px 6px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.item-counterpart-badge {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent-blue);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+/* Split view: restore the official optimum */
+.badge-restore-btn {
+  margin-left: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--accent-green);
+  background: transparent;
+  color: var(--accent-green);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.badge-restore-btn:hover {
+  background: rgba(46, 204, 113, 0.15);
+}
+
+.alert-yellow {
+  background: rgba(243, 156, 18, 0.15);
+  color: var(--accent-yellow);
+}
+
+/* Native selects follow the theme (the open list used the OS light palette) */
+select {
+  color-scheme: inherit;
+}
+
+select option {
+  background: var(--bg-surface-solid);
+  color: var(--text-primary);
+}
+
+/* ---------------------------------------------------------------------------
+   Legend symbols mirror the MapLibre layers exactly
+   --------------------------------------------------------------------------- */
+.ring-green,
+.ring-yellow,
+.ring-red {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-width: 3px !important;
+  border-style: solid !important;
+}
+
+.ring-green { border-color: #2ECC71 !important; }
+.ring-yellow { border-color: #F1C40F !important; }
+.ring-red { border-color: #E74C3C !important; }
+
+.ring-bunching {
+  background: transparent !important;
+  border: 2px solid var(--text-secondary) !important;
+  outline: 2.5px solid #F39C12 !important;
+  outline-offset: 3px !important;
+  animation: none !important;
+}
+
+.station-low { background: rgba(46, 204, 113, 0.55) !important; box-shadow: 0 0 0 2px #2ECC71 !important; }
+.station-med { background: rgba(243, 156, 18, 0.55) !important; box-shadow: 0 0 0 2px #F39C12 !important; }
+.station-high { background: rgba(231, 76, 60, 0.55) !important; box-shadow: 0 0 0 2px #E74C3C !important; animation: none !important; }
+
+.legend-bus-symbol {
+  flex-shrink: 0;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  border: 2px solid var(--text-primary);
+}
+
+.legend-bus-symbol.big {
+  width: 16px;
+  height: 16px;
+}
+
+.legend-bus-symbol.small {
+  width: 9px;
+  height: 9px;
+  margin: 5px 3px 0;
+  opacity: 0.75;
+  border-width: 1px;
+}
+
+.legend-color-chips {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.legend-color-chips i {
+  width: 6px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+.legend-note {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.route-legend-chip.muted {
+  opacity: 0.7;
+}
+
+.analytics-source-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent-yellow);
+  background: rgba(243, 156, 18, 0.1);
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
