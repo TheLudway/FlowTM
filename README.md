@@ -156,6 +156,25 @@ Abra **`http://localhost:5173`**. Además del mapa y la analítica, la pestaña 
 uv run pytest tests -q
 ```
 
+### 5. Ejecutar con Docker Compose
+
+Docker Compose construye el backend FastAPI y el frontend React servido por Nginx.
+El frontend publica también la API bajo `/api`, por lo que solo es necesario abrir
+un puerto:
+
+```bash
+docker compose up --build -d
+docker compose ps
+docker compose logs -f
+```
+
+Abra **`http://localhost:8080`**. El puerto puede cambiarse con
+`FLOWTM_PORT=9000 docker compose up --build -d`. Para detener los servicios:
+
+```bash
+docker compose down
+```
+
 ---
 
 ## 👥 Equipo de Investigación y Créditos

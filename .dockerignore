@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+__pycache__
+*.py[cod]
+.ruff_cache
+.pytest_cache
+frontend/node_modules
+frontend/dist
+data/raw
+data/processed
+docs
+tests
+notebooks
+*.duckdb
