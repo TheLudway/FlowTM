@@ -25,6 +25,8 @@ export interface RouteConfig {
   service: string;
   color: string;
   role?: 'optimizable' | 'fondo';
+  /** Opposite-direction route with the same number (e.g. B13 for H13). */
+  counterpart?: string | null;
   headway_min: number;
   cycle_time_min?: number;
   stops: string[];
@@ -89,6 +91,8 @@ export interface InterpolatedBus {
   occupancy_pct: number;
   passengers: number;
   color: string;
+  /** Route is one of the 6 services the agent optimizes. */
+  is_optimizable?: boolean;
   bus_type: BusTypology;
   capacity: number;
   length_m: number;
@@ -186,11 +190,23 @@ export interface ReplayPayload {
   summary: SummaryKPIs;
 }
 
+/** Description of a Lab run shown on the split-screen badge. */
+export interface LabRunInfo {
+  algorithm: string;
+  finishedAt: string;
+  deltaU: number;
+  validated: boolean;
+}
+
 /** An agent run from the Agent Lab, ready to be shown on the map. */
 export interface AgentRunPayload {
   replay: ReplayPayload;
   log: AIOptimizationLog;
+  source: LabRunInfo;
 }
+
+/** Which schedule the optimized (right) side of the split view is showing. */
+export type OptimizedSource = { kind: 'agente' } | ({ kind: 'laboratorio' } & LabRunInfo);
 
 export interface PairedStat {
   base: number;
