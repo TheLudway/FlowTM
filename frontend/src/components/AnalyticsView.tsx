@@ -24,8 +24,6 @@ import type {
   SummaryKPIs,
 } from '../types';
 
-/** Physical fleet bound B_max (buses) enforced by the optimizer. */
-const MAX_FLEET = 106;
 /** Avance II, Section 8: target reduction of mean platform wait time. */
 const WAIT_REDUCTION_GOAL_PCT = 15;
 const PLACEHOLDER = '—';
@@ -86,6 +84,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   // until it loads, so the chart never displays invented values.
   const history = useMemo<AIOptimizationIteration[]>(() => aiLog?.history ?? [], [aiLog]);
   const totalIterations = Math.max(0, history.length - 1);
+  const optimizableCount = aiLog?.optimizable_routes?.length ?? routes.filter((r) => r.role === 'optimizable').length;
+  const odPairs = summary?.od_top?.slice(0, 4) ?? [];
 
   // Selected iteration to display in inspection bar (hovered or winning optimum)
   const activeInspectorIteration = useMemo<AIOptimizationIteration>(() => {
@@ -95,6 +95,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   }, [hoveredIteration, history]);
 
   // Scenario comparison derived from the exported simulation outputs.
+  // Physical fleet bound B_max of the scenario (current GTFS fleet of the routes).
+  const maxFleet = aiLog?.max_fleet;
+  const MAX_FLEET: number | string = maxFleet ?? PLACEHOLDER;
   const baseFleet = aiLog?.baseline?.fleet_used;
   const optFleet = aiLog?.optimized?.fleet_used;
   const fleetSaved = baseFleet !== undefined && optFleet !== undefined ? baseFleet - optFleet : undefined;
@@ -291,7 +294,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <MetricTooltip
                 title="Cola de Espera por Estación"
                 description="Cantidad de pasajeros esperando en andenes a lo largo del corredor Norte-Caracas al tiempo actual."
-                interpretation="Estaciones troncales críticas como Calle 161, Pepe Sierra o Calle 106 concentran aglomeración en la línea base."
+                interpretation="Las estaciones atendidas solo por servicios corrientes (pocas rutas paran en ellas) acumulan las colas más largas."
                 flowtmGoal="Evitar andenes colapsados redistribuyendo la capacidad de paso."
               />
             </div>
@@ -332,7 +335,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 title="Intervalo de Despacho (Headway)"
                 description="Tiempo en minutos entre buses sucesivos de la misma ruta (Vector H en [2.0, 15.0]^6)."
                 interpretation="Menor intervalo = mayor frecuencia. El agente ajusta H para equilibrar la oferta con la demanda real."
-                flowtmGoal="Sostener la flota por debajo de 106 buses: sum_r ceil(TiempoCiclo_r / h_r) <= 106."
+                flowtmGoal={`Sostener la flota dentro de la cota: sum_r ceil(TiempoCiclo_r / h_r) <= ${MAX_FLEET}.`}
               />
             </div>
             <p className="section-card-subtitle">
@@ -342,7 +345,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </p>
 
             <div className="route-balance-list">
-              {routes.map((r: RouteConfig) => {
+              {[...routes]
+                .sort((a, b) => Number(b.role === 'optimizable') - Number(a.role === 'optimizable'))
+                .map((r: RouteConfig) => {
                 const headway = (activeHeadways as any)[r.id] ?? r.headway_min;
                 const baseH = (aiLog?.baseline?.headways as any)?.[r.id] ?? r.headway_min;
                 const diff = headway - baseH;
@@ -356,7 +361,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       <div className="route-meta-stack">
                         <div className="route-name-title">{r.service}</div>
                         <div className="route-detail-sub">
-                          {r.stops_count} paradas &bull; {r.bus_type === 'biarticulado' ? 'Biarticulado (250p)' : 'Articulado (160p)'}
+                          {r.stops_count} paradas &bull; {r.bus_type === 'biarticulado' ? 'Biarticulado' : 'Articulado'} ({r.capacity ?? 160}p)
+                          {r.role !== 'optimizable' && ' • Fondo (GTFS fijo)'}
                         </div>
                       </div>
                     </div>
@@ -389,7 +395,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <div className="master-header-left">
             <div className="header-breadcrumbs-row">
               <span className="breadcrumb-tag">CENTRO DE OPERACIONES TRANSMILENIO (OCC)</span>
-              <span className="breadcrumb-tag corridor-tag">CORREDOR TRONCAL NORTE - CARACAS (06:00 - 09:00 AM)</span>
+              <span className="breadcrumb-tag corridor-tag">CORREDOR PORTAL NORTE → MARLY · SENTIDO SUR (06:00 - 09:00 AM)</span>
               {isSplitView ? (
                 <span className="breadcrumb-tag active-split-tag">MODO COMPARATIVO DUAL ACTIVO</span>
               ) : (
@@ -398,7 +404,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </div>
             <h1 className="master-header-title">Diagnóstico Operativo, Demanda & Optimización de Frecuencias</h1>
             <p className="master-header-desc">
-              Evaluación estocástica sobre el Gemelo Digital en SimPy con 17 estaciones troncales y 6 servicios troncales.
+              Evaluación estocástica sobre el Gemelo Digital en SimPy con {stations.length} estaciones y{' '}
+              {routes.length} servicios troncales del GTFS ({optimizableCount} optimizados por el agente, el resto
+              con su frecuencia GTFS).
               Compare la operación estática oficial frente a la reconfiguración heurística del agente FlowTM-Scheduler.
             </p>
           </div>
@@ -429,62 +437,48 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <h3 className="section-card-title">1. MATRIZ DE DESEO Y DEMANDA ORIGEN - DESTINO (VALIDADA TULLAVE)</h3>
                 <MetricTooltip
                   title="Matriz Origen-Destino (Demanda TuLlave)"
-                  description="Distribución real de viajes entre estaciones calculada a partir de millones de validaciones empíricas de torniquete de TransMilenio."
-                  interpretation="Identifica los pares de mayor demanda masiva (como Portal Norte hacia Calle 72 o Calle 100) para asignar buses expresos de alta capacidad."
+                  description="Viajes simulados por par origen–destino. El origen viene de las validaciones de entrada; el destino, de un modelo gravitacional sobre las salidas observadas (el recaudo troncal no registra el destino de cada viaje)."
+                  interpretation="Identifica los pares de mayor demanda para decidir qué servicios (expresos o corrientes) deben reforzarse."
                   flowtmGoal="Dimensionar la oferta en las rutas expresas prioritarias para maximizar la velocidad comercial."
                 />
               </div>
               <p className="section-card-subtitle">
-                Flujos de pasajeros que ingresan al corredor (48,899 viajes durante el pico de 3 horas). Explica por qué ciertas estaciones sufren sobrecupo.
+                Pares origen–destino más frecuentes en la simulación base: llegadas Poisson calibradas con validaciones
+                tullave y destinos según las salidas AM observadas (modelo gravitacional).
               </p>
             </div>
             <span className="badge-tullave font-mono">MATRICES TULLAVE VALIDADA</span>
           </div>
 
           <div className="od-flow-grid">
-            <div className="od-flow-card">
-              <div className="od-card-header">
-                <span className="od-pair-name">Portal Norte &rarr; Calle 72 / Flores</span>
-                <span className="od-pair-val font-mono tabular-nums">16,720 pax (34.2%)</span>
+            {odPairs.length === 0 && (
+              <div className="od-flow-card">
+                <span className="od-pair-sub">Sin datos OD exportados para el escenario base.</span>
               </div>
-              <div className="od-progress-track">
-                <div className="od-progress-fill" style={{ width: '34.2%', backgroundColor: '#E53935' }} />
+            )}
+            {odPairs.map((pair) => (
+              <div className="od-flow-card" key={`${pair.origin}-${pair.destination}`}>
+                <div className="od-card-header">
+                  <span className="od-pair-name">
+                    {pair.origin_name} &rarr; {pair.destination_name}
+                  </span>
+                  <span className="od-pair-val font-mono tabular-nums">
+                    {pair.passengers.toLocaleString()} pax ({pair.share_pct.toFixed(1)}%)
+                  </span>
+                </div>
+                <div className="od-progress-track">
+                  <div
+                    className="od-progress-fill"
+                    style={{ width: `${Math.min(100, pair.share_pct)}%`, backgroundColor: 'var(--accent-blue)' }}
+                  />
+                </div>
+                <span className="od-pair-sub">
+                  {pair.destination === 'SUR'
+                    ? 'Viajes que continúan al sur de Marly (Centro, Calle 26, Caracas Sur)'
+                    : 'Viaje interno del corredor'}
+                </span>
               </div>
-              <span className="od-pair-sub">Demanda masiva troncal: atendida por B13, B74, B75</span>
-            </div>
-
-            <div className="od-flow-card">
-              <div className="od-card-header">
-                <span className="od-pair-name">Portal Norte &rarr; Calle 100</span>
-                <span className="od-pair-val font-mono tabular-nums">11,002 pax (22.5%)</span>
-              </div>
-              <div className="od-progress-track">
-                <div className="od-progress-fill" style={{ width: '22.5%', backgroundColor: '#1976D2' }} />
-              </div>
-              <span className="od-pair-sub">Punto neurálgico de transbordo hacia Suba / NQS</span>
-            </div>
-
-            <div className="od-flow-card">
-              <div className="od-card-header">
-                <span className="od-pair-name">Toberín / Mazurén &rarr; Calle 72</span>
-                <span className="od-pair-val font-mono tabular-nums">8,850 pax (18.1%)</span>
-              </div>
-              <div className="od-progress-track">
-                <div className="od-progress-fill" style={{ width: '18.1%', backgroundColor: '#FFA000' }} />
-              </div>
-              <span className="od-pair-sub">Demanda zonal norte: atendida por B18, B23, B27</span>
-            </div>
-
-            <div className="od-flow-card">
-              <div className="od-card-header">
-                <span className="od-pair-name">Calle 100 &rarr; Calle 45</span>
-                <span className="od-pair-val font-mono tabular-nums">7,236 pax (14.8%)</span>
-              </div>
-              <div className="od-progress-track">
-                <div className="od-progress-fill" style={{ width: '14.8%', backgroundColor: '#00897B' }} />
-              </div>
-              <span className="od-pair-sub">Polo universitario y financiero de Caracas Centro</span>
-            </div>
+            ))}
           </div>
         </section>
 
@@ -823,8 +817,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="goal-item-card">
                 <div className="goal-top">
                   <span className="goal-title">Uso Total de Flota (B_usados)</span>
-                  <span className={`goal-status-pill ${optFleet !== undefined && optFleet <= MAX_FLEET ? 'ok' : 'partial'}`}>
-                    {optFleet !== undefined && optFleet <= MAX_FLEET ? 'CUMPLE' : 'EXCEDIDO'}
+                  <span className={`goal-status-pill ${optFleet !== undefined && maxFleet !== undefined && optFleet <= maxFleet ? 'ok' : 'partial'}`}>
+                    {optFleet !== undefined && maxFleet !== undefined && optFleet <= maxFleet ? 'CUMPLE' : 'EXCEDIDO'}
                   </span>
                 </div>
                 <div className="goal-vals">

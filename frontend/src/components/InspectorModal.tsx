@@ -12,12 +12,14 @@ import {
   Warning,
   X,
 } from '@phosphor-icons/react';
-import type { RouteConfig, SelectedEntity } from '../types';
+import type { AIOptimizationLog, InterpolatedBus, RouteConfig, SelectedEntity } from '../types';
 
 interface InspectorModalProps {
   selectedEntity: SelectedEntity | null;
   onClose: () => void;
   routes: RouteConfig[];
+  optimizedBuses?: InterpolatedBus[];
+  aiLog?: AIOptimizationLog | null;
   isCameraFollowing?: boolean;
   onToggleCameraFollow?: () => void;
   isSplitView?: boolean;
@@ -27,6 +29,8 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
   selectedEntity,
   onClose,
   routes,
+  optimizedBuses = [],
+  aiLog = null,
   isCameraFollowing = false,
   onToggleCameraFollow,
   isSplitView = false,
@@ -37,14 +41,27 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
   const data = selectedEntity.data;
 
   const routeInfo = isBus ? routes.find((r) => r.id === data.route) : null;
-  const speed = data.speed_kmh !== undefined ? data.speed_kmh : (data.is_stopped ? 0.0 : 38.5);
-  const busType = data.bus_type || (['B13', 'B27', 'B75'].includes(data.route) ? 'biarticulado' : 'articulado');
+  const speed = data.speed_kmh ?? 0.0;
+  const busType = data.bus_type || 'articulado';
   const capacity = data.capacity || (busType === 'biarticulado' ? 250 : 160);
   const lengthM = data.length_m || (busType === 'biarticulado' ? 27 : 18);
 
-  const optPassengers = data.opt_passengers !== undefined ? data.opt_passengers : Math.max(12, Math.round(data.passengers * 0.78));
-  const optOccupancy = data.opt_occupancy_pct !== undefined ? data.opt_occupancy_pct : Math.round((optPassengers / capacity) * 100);
-  const optSpeed = data.opt_speed_kmh !== undefined ? data.opt_speed_kmh : (data.is_stopped ? 0.0 : Math.min(48.0, speed * 1.08));
+  // Optimized counterpart: nearest bus of the same route in the exported optimized
+  // telemetry at the same instant (trips differ between scenarios, so there is no
+  // one-to-one vehicle match).
+  const optBus = isBus
+    ? optimizedBuses
+        .filter((b) => b.route === data.route)
+        .reduce<InterpolatedBus | null>((closest, b) => {
+          const d = Math.hypot(b.lat - data.lat, b.lon - data.lon);
+          if (!closest) return b;
+          return d < Math.hypot(closest.lat - data.lat, closest.lon - data.lon) ? b : closest;
+        }, null)
+    : null;
+  const baseHeadway = aiLog?.baseline?.headways?.[data.route];
+  const optHeadway = aiLog?.optimized?.headways?.[data.route];
+  const isOptimizableRoute = baseHeadway !== undefined;
+  const occupancyDelta = optBus ? optBus.occupancy_pct - data.occupancy_pct : undefined;
 
   return (
     <div className={`inspector-modal-container glass-panel ${isSplitView ? 'split-comparative' : 'single-view'}`}>
@@ -185,46 +202,67 @@ export const InspectorModal: React.FC<InspectorModalProps> = ({
                   <Sparkle size={12} weight="fill" color="var(--accent-yellow)" />
                 </div>
 
-                <div className="comp-metric-row">
-                  <span className="comp-label">Estado de Marcha:</span>
-                  <span className="comp-val font-mono text-success">
-                    {data.opt_is_stopped ? `Parada sincronizada` : 'En crucero regular'}
-                  </span>
-                </div>
+                {!isOptimizableRoute && (
+                  <div className="comp-metric-row">
+                    <span className="comp-label">Rol en el agente:</span>
+                    <span className="comp-val font-mono">Servicio de fondo (frecuencia GTFS fija)</span>
+                  </div>
+                )}
 
-                <div className="comp-metric-row">
-                  <span className="comp-label">Velocidad:</span>
-                  <span className="comp-val font-mono tabular-nums text-success">{optSpeed.toFixed(1)} km/h</span>
-                </div>
+                {isOptimizableRoute && (
+                  <div className="comp-metric-row">
+                    <span className="comp-label">Intervalo (base → IA):</span>
+                    <span className="comp-val font-mono tabular-nums">
+                      {baseHeadway?.toFixed(2)} → {optHeadway?.toFixed(2) ?? '—'} min
+                    </span>
+                  </div>
+                )}
 
-                <div className="comp-metric-row">
-                  <span className="comp-label">Pasajeros:</span>
-                  <span className="comp-val font-mono tabular-nums text-success">
-                    {optPassengers} <span className="text-muted">/ {capacity}</span>
-                  </span>
-                </div>
-
-                <div className="comp-metric-row">
-                  <span className="comp-label">Ocupación:</span>
-                  <span className="comp-val font-mono tabular-nums text-success">
-                    {optOccupancy.toFixed(1)}% <span className="delta-badge">-{(data.occupancy_pct - optOccupancy).toFixed(1)}%</span>
-                  </span>
-                </div>
-
-                <div className="comp-gauge-mini">
-                  <div
-                    className="comp-gauge-fill"
-                    style={{
-                      width: `${Math.min(100, optOccupancy)}%`,
-                      backgroundColor: optOccupancy >= 85 ? 'var(--accent-red)' : optOccupancy >= 60 ? 'var(--accent-yellow)' : 'var(--accent-green)',
-                    }}
-                  />
-                </div>
-
-                <div className="comp-alert-badge alert-green">
-                  <CheckCircle size={12} weight="fill" />
-                  <span>Headway regular (0 pegamiento, -3.8m espera)</span>
-                </div>
+                {optBus ? (
+                  <>
+                    <div className="comp-metric-row">
+                      <span className="comp-label">Bus más cercano:</span>
+                      <span className="comp-val font-mono">{optBus.bus_id}</span>
+                    </div>
+                    <div className="comp-metric-row">
+                      <span className="comp-label">Pasajeros:</span>
+                      <span className="comp-val font-mono tabular-nums">
+                        {optBus.passengers} <span className="text-muted">/ {optBus.capacity}</span>
+                      </span>
+                    </div>
+                    <div className="comp-metric-row">
+                      <span className="comp-label">Ocupación:</span>
+                      <span className="comp-val font-mono tabular-nums">
+                        {optBus.occupancy_pct.toFixed(1)}%{' '}
+                        {occupancyDelta !== undefined && (
+                          <span className="delta-badge">
+                            {occupancyDelta >= 0 ? '+' : ''}
+                            {occupancyDelta.toFixed(1)} pts
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="comp-gauge-mini">
+                      <div
+                        className="comp-gauge-fill"
+                        style={{
+                          width: `${Math.min(100, optBus.occupancy_pct)}%`,
+                          backgroundColor:
+                            optBus.occupancy_pct >= 85
+                              ? 'var(--accent-red)'
+                              : optBus.occupancy_pct >= 60
+                                ? 'var(--accent-yellow)'
+                                : 'var(--accent-green)',
+                        }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="comp-metric-row">
+                    <span className="comp-label">Telemetría optimizada:</span>
+                    <span className="comp-val font-mono">Sin bus de esta ruta en este instante</span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
