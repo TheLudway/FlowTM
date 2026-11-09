@@ -159,29 +159,59 @@ uv run pytest tests -q
 ### 5. Ejecutar con Docker Compose
 
 Docker Compose construye el backend FastAPI y el frontend React servido por Nginx.
-Antes de arrancar, asegúrese de tener disponibles los insumos procesados en
-`data/processed/`. El servicio `pipeline` ejecuta automáticamente los notebooks de conversión y
-limpieza (Marimo) y después los pasos `01_preparar_escenario.py`,
+Antes de arrancar, copie los archivos de datos suministrados por el proyecto en
+`data/raw/`. Estos datos no se versionan en Git: el `.gitignore` excluye los
+archivos de gran tamaño (`.7z`, `.txt`, `.csv` y `.parquet`). El servicio
+`pipeline` ejecuta automáticamente los notebooks de conversión y limpieza
+(Marimo) y después los pasos `01_preparar_escenario.py`,
 `02_correr_simulador_base.py`, `03_optimizar_frecuencias.py` y
-`export_frontend_data.py`; así regenera desde cero la telemetría que consume el
-mapa. Los datos crudos y procesados no se copian a la imagen porque ocupan
-varios GB: se montan desde `data/raw/` y `data/processed/`. Si `data/raw/`
-contiene archivos `.7z`, Compose los descomprime automáticamente en ese
-directorio antes de ejecutar los notebooks.
+`export_frontend_data.py`; así regenera la telemetría que consume el mapa.
+Los datos crudos y procesados no se copian a la imagen porque ocupan varios GB:
+se montan desde `data/raw/` y `data/processed/`. Si `data/raw/` contiene
+archivos `.7z`, Compose instala 7-Zip en la imagen y los descomprime
+automáticamente junto al archivo antes de ejecutar los notebooks.
+
+La estructura de entrada debe conservar las carpetas del conjunto de datos. En
+particular, el feed GTFS debe quedar disponible como
+`data/raw/gtfs/gtfs_20260727/*.txt` después de extraer los archivos. Si los
+archivos ya están descomprimidos, no es necesario repetir la extracción.
 
 ```bash
 docker compose up --build -d
 docker compose ps
-docker compose logs -f
+docker compose logs -f pipeline
+```
+
+Espere a que `pipeline` termine con `Exited (0)` y a que `backend` aparezca
+como `healthy`:
+
+```bash
+docker compose ps -a
+curl --fail http://localhost:8080/healthz
+curl --fail http://localhost:8080/api/escenario
 ```
 
 El frontend publica también la API bajo `/api`. Abra **`http://localhost:8080`**
-cuando `pipeline` haya terminado y `backend` aparezca como `healthy`. El puerto puede cambiarse con
-`FLOWTM_PORT=9000 docker compose up --build -d`. Para detener los servicios:
+solo después de que esas comprobaciones sean correctas. El puerto puede
+cambiarse con `FLOWTM_PORT=9000 docker compose up --build -d`. Para detener los servicios:
 
 ```bash
 docker compose down
 ```
+
+Para reconstruir todo después de actualizar el código o cambiar los datos:
+
+```bash
+docker compose down
+docker compose up --build --force-recreate -d
+docker compose logs -f pipeline
+```
+
+Si el pipeline falla, revise primero `docker compose logs pipeline`. Un error
+`FileNotFoundError` para `agency.parquet` normalmente indica que faltan los
+archivos GTFS extraídos en `data/raw/gtfs/gtfs_20260727/`; verifique la
+estructura antes de volver a ejecutar. El backend y el frontend no arrancan
+hasta que el pipeline termine correctamente.
 
 ---
 
